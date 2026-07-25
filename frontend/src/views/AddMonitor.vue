@@ -27,8 +27,10 @@
         @update:form="onFormUpdate"
         @change:type="changeMonitorType"
       >
+        <template #advanced-actions>
+          <button v-if="!isEdit" class="btn btn-ghost btn-sm" type="button" @click="handleSaveAsRule" :disabled="submitting">{{ form.monitorType === 'field_transition' ? '另存为价格规则' : '另存为网页规则' }}</button>
+        </template>
         <template #actions>
-          <button v-if="!isEdit" class="btn btn-ghost btn-sm" @click="handleSaveAsRule" :disabled="submitting" style="margin-right: auto;">{{ form.monitorType === 'field_transition' ? '另存为价格规则' : '另存为网页规则' }}</button>
           <button class="btn btn-primary" :disabled="submitting" @click="handleSubmit">
             {{ submitting ? '提交中...' : (isEdit ? '保存修改' : '创建并启动') }}
           </button>
@@ -43,7 +45,7 @@ import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { createMonitor, updateMonitor, fetchMonitorConfig, fetchAccounts, quickCreateScanRule, validateMonitorConfig } from '../api/monitors'
 import MonitorForm from '../components/monitor/form/MonitorForm.vue'
-import { createEmptyForm, toMonitorRequest, fromMonitorResponse, hasSemanticChange, validateForm, getDetectionFingerprint } from '../composables/useMonitorForm'
+import { createEmptyForm, toMonitorRequest, fromMonitorResponse, hasSemanticChange, validateForm, getDetectionFingerprint, suggestMonitorName, suggestedScanRuleScope } from '../composables/useMonitorForm'
 import { useToastMessages } from '../composables/useToastMessages'
 
 const router = useRouter()
@@ -195,6 +197,7 @@ onMounted(async () => {
 
 // Validate before submit
 async function runValidation() {
+  ensureName()
   validationAttemptFingerprint.value = JSON.stringify(toMonitorRequest(form))
   const localError = validateForm(form)
   if (localError) {
@@ -225,6 +228,7 @@ async function runValidation() {
 }
 
 async function handleSubmit() {
+  ensureName()
   const err = validateForm(form)
   if (err) { submitError.value = err; return }
   const semanticChange = !isEdit.value || !originalFormSnapshot.value || hasSemanticChange(originalFormSnapshot.value, form)
@@ -253,6 +257,7 @@ async function handleSubmit() {
 }
 
 async function handleSaveAsRule() {
+  ensureName()
   if (!form.extraction.containerSelector) return
   const example = form.monitorType === 'field_transition' ? '商城商品 SKU' : '公告列表'
   const name = prompt(`规则名称（如 ${example}）`, form.basic.name.trim() + ' 规则')
@@ -261,7 +266,7 @@ async function handleSaveAsRule() {
     await quickCreateScanRule({
       name,
       url: form.basic.url,
-      scope_type: 'exact',
+      scope_type: suggestedScanRuleScope(form.basic.url, form.monitorType),
       config: {
         container: form.extraction.containerSelector,
         item: form.extraction.itemSelector,
@@ -272,6 +277,7 @@ async function handleSaveAsRule() {
           filter_path: form.extraction.filterPath,
           filter_equals: String(form.extraction.filterEquals ?? ''),
           headers: form.extraction.sourceHeaders || {},
+          ...(Object.keys(form.extraction.sourceVariables || {}).length ? { variables: form.extraction.sourceVariables } : {}),
         } : undefined,
         fields: form.extraction.fields.filter(f => f.name).map(f => ({
           name: f.name, selector: f.selector, type: f.type, attr: f.attr || '', transform: f.transform || '',
@@ -283,9 +289,16 @@ async function handleSaveAsRule() {
     showError('保存规则失败: ' + (e.response?.data?.message || e.message))
   }
 }
+
+function ensureName() {
+  if (!form.basic.name.trim()) {
+    form.basic.name = suggestMonitorName(form.basic.url, form.monitorType)
+  }
+}
 </script>
 
 <style scoped>
+.add-monitor { max-width: 820px; }
 .page-header { margin-bottom: 1.5rem; }
 .page-header h1 { font-size: 1.5rem; font-weight: 700; color: var(--text); margin-top: 0.5rem; }
 

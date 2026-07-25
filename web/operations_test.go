@@ -114,6 +114,36 @@ func TestDBQuickScanRulePreservesDynamicVariablesAndSectionScope(t *testing.T) {
 	}
 }
 
+func TestSectionRuleExportUsesDirectoryURLAndRoundTrips(t *testing.T) {
+	enabled := true
+	rule := database.ScanRuleTemplate{
+		Name: "荔枝商品", SourceURL: "https://lizhi.shop/products/adguard",
+		ScopeType: monitor.ScanRuleScopeSection, MatchHost: "lizhi.shop", MatchPath: "/products",
+		Container: "data", Item: "*", Enabled: true,
+		Fields: []database.ScanRuleField{{Name: "title", Selector: "name", Type: "text"}},
+	}
+	exported := scanRulesForExport([]database.ScanRuleTemplate{rule})
+	if len(exported) != 1 || exported[0].SourceURL != "https://lizhi.shop/products/" {
+		t.Fatalf("unexpected exported source URL: %+v", exported)
+	}
+	data, err := json.Marshal(exported[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var importedRequest scanRuleImportRequest
+	if err := json.Unmarshal(data, &importedRequest); err != nil {
+		t.Fatal(err)
+	}
+	importedRequest.Enabled = &enabled
+	imported, err := dbImportedScanRule(importedRequest)
+	if err != nil {
+		t.Fatalf("reimport exported rule: %v", err)
+	}
+	if imported.SourceURL != "https://lizhi.shop/products/" || imported.MatchHost != "lizhi.shop" || imported.MatchPath != "/products" {
+		t.Fatalf("scope changed after round trip: %+v", imported)
+	}
+}
+
 func TestMergeMaskedSensitiveConfigPreservesStoredSecret(t *testing.T) {
 	existing := `{"token":"abcdef123456"}`
 	merged, err := mergeMaskedSensitiveConfig("pushplus", map[string]interface{}{
@@ -130,15 +160,26 @@ func TestMergeMaskedSensitiveConfigPreservesStoredSecret(t *testing.T) {
 
 func TestMonitorSnapshotResponseIncludesFormattedPrice(t *testing.T) {
 	payload, err := json.Marshal(monitorSnapshotResponse{
-		MonitorSnapshot: database.MonitorSnapshot{ItemKey: "sku-1", PriceMinor: 12345, PriceValid: true, Currency: "CNY"},
+		MonitorSnapshot: database.MonitorSnapshot{ItemKey: "sku-1", PayloadJSON: `{"title":"黄金会员 / 无搭配"}`, PriceMinor: 12345, PriceValid: true, Currency: "CNY"},
 		PriceDisplay:    "¥123.45",
+		ItemTitle:       "黄金会员 / 无搭配",
 	})
 	if err != nil {
 		t.Fatalf("marshal snapshot response: %v", err)
 	}
 	encoded := string(payload)
-	if !strings.Contains(encoded, `"price_minor":12345`) || !strings.Contains(encoded, `"price_display":"¥123.45"`) {
+	if !strings.Contains(encoded, `"price_minor":12345`) || !strings.Contains(encoded, `"price_display":"¥123.45"`) || !strings.Contains(encoded, `"item_title":"黄金会员 / 无搭配"`) {
 		t.Fatalf("snapshot response is missing price fields: %s", encoded)
+	}
+}
+
+func TestSnapshotItemTitleReadsExtractedPackageName(t *testing.T) {
+	snapshot := database.MonitorSnapshot{PayloadJSON: `{"title":" 黄金会员 / +白描证件照 ","sku":"SKU-1"}`}
+	if got := snapshotItemTitle(snapshot); got != "黄金会员 / +白描证件照" {
+		t.Fatalf("snapshot title = %q", got)
+	}
+	if got := snapshotItemTitle(database.MonitorSnapshot{PayloadJSON: `{broken`}); got != "" {
+		t.Fatalf("malformed payload title = %q", got)
 	}
 }
 

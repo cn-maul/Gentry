@@ -1,30 +1,30 @@
 <template>
-  <div class="settings-section price-source-editor">
+  <div :class="advanced ? 'advanced-panel-section price-source-editor' : 'settings-section price-source-editor'">
+    <template v-if="!advanced">
     <div class="section-header">
       <div>
-        <h2>商品价格来源</h2>
-        <p>匹配已保存规则，或直接配置商品页面与公开接口。</p>
+        <h2>识别商品价格</h2>
+        <p>系统会从商品页中找到名称和价格。</p>
       </div>
-      <router-link to="/scan-rules" class="btn btn-ghost btn-sm">管理价格规则</router-link>
     </div>
 
     <div class="rule-match-row">
       <div class="match-target">
-        <span class="match-label">商品页面</span>
-        <code>{{ form.basic.url || '请先填写商品页面 URL' }}</code>
+        <span class="match-label">商品网址</span>
+        <code>{{ form.basic.url || '请先在上方粘贴商品网址' }}</code>
       </div>
       <button class="btn btn-primary btn-sm" type="button" :disabled="!form.basic.url || scanning" @click="handleScan">
-        {{ scanning ? '匹配中...' : '匹配价格规则' }}
+        {{ scanning ? '识别中...' : '自动识别价格' }}
       </button>
     </div>
 
-    <div v-if="scanning" class="loading"><div class="spinner" /><p>正在匹配价格规则...</p></div>
+    <div v-if="scanning" class="loading"><div class="spinner" /><p>正在识别商品价格...</p></div>
     <div v-else-if="candidates.length" class="candidate-list">
       <div v-for="(candidate, index) in candidates" :key="candidateKey(candidate, index)" class="candidate-row">
         <div class="candidate-main">
           <div class="candidate-heading">
-            <strong>{{ strategyLabel(candidate.strategy) }}</strong>
-            <span>{{ candidate.item_count }} 个商品</span>
+            <strong>识别结果 {{ index + 1 }}</strong>
+            <span>发现 {{ candidate.item_count }} 个商品</span>
           </div>
           <div class="sample-list">
             <div v-for="(item, sampleIndex) in (candidate.sample_items || []).slice(0, 5)" :key="sampleIndex" class="sample-line">
@@ -33,12 +33,45 @@
             </div>
           </div>
         </div>
-        <button class="btn btn-primary btn-sm" type="button" @click="applyCandidate(candidate)">使用规则</button>
+        <button class="btn btn-primary btn-sm" type="button" @click="applyCandidate(candidate)">选择此结果</button>
       </div>
     </div>
-    <div v-else-if="scanned" class="empty-match">未命中已保存的价格规则</div>
+    <div v-else-if="scanned" class="empty-match">暂时没有识别到价格。可以重试，或在高级设置中手动配置。</div>
     <div v-if="scanError" class="form-error">{{ scanError }}</div>
+    <div v-if="recognitionComplete && !scanning && !candidates.length" class="recognition-result">
+      <div class="recognition-heading">
+        <div>
+          <strong>已识别 {{ recognizedCount }} 个价格</strong>
+          <span>创建后将分别跟踪以下商品规格</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" type="button" @click="handleScan">重新识别</button>
+      </div>
+      <div class="recognized-price-list">
+        <div v-for="(item, index) in recognizedItems" :key="item.sku || index" class="recognized-price-row">
+          <div class="recognized-product">
+            <strong>{{ item.title || item.sku || `商品 ${index + 1}` }}</strong>
+            <code v-if="item.sku">{{ item.sku }}</code>
+          </div>
+          <div class="recognized-prices">
+            <strong>{{ formatPrice(item.price) }}</strong>
+            <span v-if="showOriginalPrice(item)">{{ formatPrice(item.original_price) }}</span>
+          </div>
+        </div>
+      </div>
+      <p v-if="recognizedItems.length < recognizedCount" class="recognized-overflow">
+        另有 {{ recognizedCount - recognizedItems.length }} 个价格已识别
+      </p>
+    </div>
+    </template>
 
+    <template v-else>
+    <div class="advanced-heading">
+      <div>
+        <h3>价格提取规则</h3>
+        <p>仅在自动识别不准确时修改这些技术选项。</p>
+      </div>
+      <router-link to="/scan-rules" class="btn btn-ghost btn-sm">管理已保存规则</router-link>
+    </div>
     <div class="source-mode" role="tablist" aria-label="价格来源类型">
       <button type="button" role="tab" :aria-selected="priceSourceMode === 'html_single'" :class="{ active: priceSourceMode === 'html_single' }" @click="selectSourceMode('html_single')">单商品网页</button>
       <button type="button" role="tab" :aria-selected="priceSourceMode === 'html_list'" :class="{ active: priceSourceMode === 'html_list' }" @click="selectSourceMode('html_list')">商品列表网页</button>
@@ -155,6 +188,7 @@
         </div>
       </div>
     </template>
+    </template>
   </div>
 </template>
 
@@ -164,6 +198,7 @@ import { previewScan } from '../../../api/monitors'
 
 const props = defineProps({
   form: { type: Object, required: true },
+  advanced: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:form'])
 
@@ -171,9 +206,13 @@ const scanning = ref(false)
 const scanned = ref(false)
 const scanError = ref('')
 const scanResult = ref(null)
+const recognitionComplete = ref(false)
+const recognizedCandidate = ref(null)
 
 const extraction = computed(() => props.form.extraction)
 const candidates = computed(() => scanResult.value?.containers || [])
+const recognizedItems = computed(() => recognizedCandidate.value?.sample_items || [])
+const recognizedCount = computed(() => recognizedCandidate.value?.item_count || recognizedItems.value.length)
 const priceSourceMode = computed(() => {
   if (extraction.value.sourceMode === 'api_json') return 'api_json'
   return props.form.rule.pageMode === 'list' ? 'html_list' : 'html_single'
@@ -183,22 +222,31 @@ const identityFieldName = computed(() => props.form.rule.identity.field || 'sku'
 const sourceVariableEntries = computed(() => Object.entries(extraction.value.sourceVariables || {}))
 
 async function handleScan() {
+  let autoApplied = false
   scanning.value = true
   scanned.value = false
   scanError.value = ''
+  recognitionComplete.value = false
+  recognizedCandidate.value = null
   try {
     const response = await previewScan({
       url: props.form.basic.url.trim(),
       keywords: '价格,售价,优惠',
       strategy_type: 'field_transition',
     })
-    if (response.code === 0) scanResult.value = response.data
+    if (response.code === 0) {
+      scanResult.value = response.data
+      if (candidates.value.length === 1) {
+        applyCandidate(candidates.value[0])
+        autoApplied = true
+      }
+    }
     else scanError.value = response.message || '规则匹配失败'
   } catch (error) {
     scanError.value = error.response?.data?.message || error.message || '规则匹配失败'
   } finally {
     scanning.value = false
-    scanned.value = true
+    scanned.value = !autoApplied
   }
 }
 
@@ -235,8 +283,21 @@ function applyCandidate(candidate) {
       target: { ...props.form.rule.target, field: priceField, valueType: 'money' },
     },
   })
+  recognizedCandidate.value = candidate
+  recognitionComplete.value = true
   scanResult.value = null
   scanned.value = false
+}
+
+function formatPrice(value) {
+  const text = String(value ?? '').trim()
+  if (!text) return '价格未读取'
+  return /[¥￥$€£]/.test(text) ? text : `¥${text}`
+}
+
+function showOriginalPrice(item) {
+  const original = String(item.original_price ?? '').trim()
+  return original && original !== String(item.price ?? '').trim()
 }
 
 function selectSourceMode(mode) {
@@ -372,6 +433,23 @@ function candidateKey(candidate, index) {
 .section-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .section-header h2 { font-size: 1.125rem; margin-bottom: 0.2rem; }
 .section-header p { color: var(--text-secondary); font-size: 0.8125rem; }
+.advanced-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.advanced-heading h3 { margin-bottom: 0.2rem; color: var(--text); font-size: 0.875rem; }
+.advanced-heading p { color: var(--text-muted); font-size: 0.75rem; }
+.recognition-result { margin-top: 0.75rem; border-top: 1px solid var(--border-light); }
+.recognition-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.9rem 0; }
+.recognition-heading > div { display: grid; gap: 0.15rem; }
+.recognition-heading strong { color: var(--success); font-size: 0.875rem; }
+.recognition-heading span { color: var(--text-muted); font-size: 0.75rem; }
+.recognized-price-list { border-top: 1px solid var(--border-light); }
+.recognized-price-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 54px; padding: 0.65rem 0; border-bottom: 1px solid var(--border-light); }
+.recognized-product { display: grid; gap: 0.15rem; min-width: 0; }
+.recognized-product strong { overflow: hidden; color: var(--text); font-size: 0.8125rem; text-overflow: ellipsis; white-space: nowrap; }
+.recognized-product code { overflow: hidden; color: var(--text-muted); font-size: 0.6875rem; text-overflow: ellipsis; white-space: nowrap; }
+.recognized-prices { display: flex; align-items: baseline; gap: 0.45rem; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.recognized-prices strong { color: var(--green); font-size: 0.9375rem; }
+.recognized-prices span { color: var(--text-muted); font-size: 0.6875rem; text-decoration: line-through; }
+.recognized-overflow { padding-top: 0.65rem; color: var(--text-muted); font-size: 0.75rem; }
 .rule-match-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 0; border-top: 1px solid var(--border-light); border-bottom: 1px solid var(--border-light); }
 .match-target { min-width: 0; display: grid; gap: 0.2rem; }
 .match-label { color: var(--text-muted); font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
@@ -418,5 +496,9 @@ function candidateKey(candidate, index) {
   .variable-remove { justify-self: end; }
   .candidate-row { grid-template-columns: 1fr; }
   .candidate-row .btn { width: 100%; }
+  .recognition-heading { align-items: stretch; flex-direction: column; }
+  .recognition-heading .btn { width: 100%; }
+  .recognized-price-row { align-items: flex-start; }
+  .recognized-product strong { white-space: normal; }
 }
 </style>

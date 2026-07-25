@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -73,6 +75,22 @@ type monitorConfigResponse struct {
 type monitorSnapshotResponse struct {
 	database.MonitorSnapshot
 	PriceDisplay string `json:"price_display"`
+	ItemTitle    string `json:"item_title,omitempty"`
+}
+
+func snapshotItemTitle(snapshot database.MonitorSnapshot) string {
+	if strings.TrimSpace(snapshot.PayloadJSON) == "" {
+		return ""
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal([]byte(snapshot.PayloadJSON), &payload); err != nil {
+		return ""
+	}
+	title, ok := payload["title"].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(title)
 }
 
 func monitorConfigFromSite(site *database.Site) monitorConfigResponse {
@@ -861,6 +879,26 @@ func scanRulesFromModels(rules []database.ScanRuleTemplate) []scanRuleResponse {
 	return result
 }
 
+func scanRulesForExport(rules []database.ScanRuleTemplate) []scanRuleResponse {
+	result := scanRulesFromModels(rules)
+	for index := range result {
+		if result[index].ScopeType != monitor.ScanRuleScopeSection || result[index].MatchHost == "" || result[index].MatchPath == "" {
+			continue
+		}
+		scheme := "https"
+		if source, err := url.Parse(result[index].SourceURL); err == nil && (source.Scheme == "http" || source.Scheme == "https") {
+			scheme = source.Scheme
+		}
+		scopeURL := &url.URL{
+			Scheme: scheme,
+			Host:   result[index].MatchHost,
+			Path:   strings.TrimSuffix(result[index].MatchPath, "/") + "/",
+		}
+		result[index].SourceURL = scopeURL.String()
+	}
+	return result
+}
+
 func scanRuleFieldsFromRequest(fields []scanRuleFieldRequest) []database.ScanRuleField {
 	result := make([]database.ScanRuleField, 0, len(fields))
 	for _, f := range fields {
@@ -915,6 +953,9 @@ type scanRuleImportRequest struct {
 	URLContains string                 `json:"url_contains"`
 	SourceURL   string                 `json:"source_url"`
 	ScopeType   string                 `json:"scope_type"`
+	MatchHost   string                 `json:"match_host"`
+	MatchPath   string                 `json:"match_path"`
+	MatchQuery  string                 `json:"match_query"`
 	Container   string                 `json:"container"`
 	Item        string                 `json:"item"`
 	Priority    int                    `json:"priority"`
@@ -1042,6 +1083,9 @@ func dbQuickScanRuleFromRequest(req *quickScanRuleRequest) (*database.ScanRuleTe
 	if err := monitor.ApplyScanRuleScope(rule, req.URL, req.ScopeType); err != nil {
 		return nil, err
 	}
+	if _, err := monitor.GeneralizeKnownPriceRule(rule); err != nil {
+		return nil, err
+	}
 	return rule, nil
 }
 
@@ -1083,6 +1127,23 @@ func dbImportedScanRule(req scanRuleImportRequest) (*database.ScanRuleTemplate, 
 		if rule.URLContains == "" {
 			return nil, fmt.Errorf("旧版规则缺少 url_contains")
 		}
+		return rule, nil
+	}
+	if req.ScopeType == monitor.ScanRuleScopeSection && strings.TrimSpace(req.MatchHost) != "" && strings.TrimSpace(req.MatchPath) != "" {
+		source, err := url.Parse(strings.TrimSpace(req.SourceURL))
+		if err != nil || source.Scheme == "" || source.Host == "" {
+			return nil, fmt.Errorf("同站目录规则的 source_url 无效")
+		}
+		matchPath := path.Clean("/" + strings.TrimPrefix(req.MatchPath, "/"))
+		if !strings.EqualFold(source.Host, req.MatchHost) || strings.TrimSuffix(path.Clean(source.Path), "/") != strings.TrimSuffix(matchPath, "/") {
+			return nil, fmt.Errorf("同站目录规则的 source_url 与匹配范围不一致")
+		}
+		scopeProbe := *source
+		scopeProbe.Path = strings.TrimSuffix(matchPath, "/") + "/__gentry_scope__"
+		if err := monitor.ApplyScanRuleScope(rule, scopeProbe.String(), req.ScopeType); err != nil {
+			return nil, err
+		}
+		rule.SourceURL = source.String()
 		return rule, nil
 	}
 	if err := monitor.ApplyScanRuleScope(rule, req.SourceURL, req.ScopeType); err != nil {
@@ -1172,7 +1233,7 @@ func (s *WebServer) exportScanRules(c *gin.Context) {
 	}
 	c.Header("Content-Disposition", `attachment; filename="gentry-scan-rules.json"`)
 	c.JSON(http.StatusOK, NewSuccessResponse(scanRuleExportDocument{
-		Version: 1, ExportedAt: time.Now(), Rules: scanRulesFromModels(rules),
+		Version: 1, ExportedAt: time.Now(), Rules: scanRulesForExport(rules),
 	}))
 }
 
@@ -1299,6 +1360,10 @@ func (s *WebServer) updateScanRule(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则适用范围无效: "+err.Error()))
 			return
 		}
+	}
+	if _, err := monitor.GeneralizeKnownPriceRule(&rule); err != nil {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则通用化失败: "+err.Error()))
+		return
 	}
 	if err := database.UpdateScanRuleTemplate(&rule, updated.Fields); err != nil {
 		c.JSON(http.StatusInternalServerError, NewErrorResponse(500, "更新扫描规则失败: "+err.Error()))
@@ -2023,7 +2088,11 @@ func (s *WebServer) getMonitorSnapshots(c *gin.Context) {
 		if snapshot.PriceValid {
 			priceDisplay = monitor.FormatPrice(snapshot.PriceMinor, snapshot.Currency)
 		}
-		result = append(result, monitorSnapshotResponse{MonitorSnapshot: snapshot, PriceDisplay: priceDisplay})
+		result = append(result, monitorSnapshotResponse{
+			MonitorSnapshot: snapshot,
+			PriceDisplay:    priceDisplay,
+			ItemTitle:       snapshotItemTitle(snapshot),
+		})
 	}
 	c.JSON(http.StatusOK, NewSuccessResponse(result))
 }

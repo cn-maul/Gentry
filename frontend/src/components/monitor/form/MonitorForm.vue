@@ -6,7 +6,6 @@
 
     <template v-if="form.monitorType === 'presence'">
       <ExtractionEditor v-model="form.extraction" :url="form.basic.url" />
-      <PresenceRuleEditor />
     </template>
 
     <template v-else>
@@ -14,30 +13,59 @@
       <NumericTransitionRuleEditor :form="form" @update:form="updateForm" />
     </template>
 
-    <NotificationEditor
-      v-model="form.notification"
-      :accounts="accounts"
-      :monitorType="form.monitorType"
-    />
-
-    <div class="validation-actions">
-      <div>
-        <strong>{{ form.monitorType === 'field_transition' ? '验证商品与价格' : '验证网页提取' }}</strong>
-        <p>{{ form.monitorType === 'field_transition' ? '检查商品身份、价格解析和重复 SKU。' : '检查页面区域和内容字段。' }}</p>
-      </div>
-      <button class="btn btn-ghost" type="button" :disabled="validationLoading" @click="$emit('validate')">
-        {{ validationLoading ? '验证中...' : (form.monitorType === 'field_transition' ? '验证价格' : '验证网页') }}
-      </button>
-    </div>
-
     <MonitorValidationPanel :result="validationResult" :loading="validationLoading" />
 
-    <MonitorFormSummary :form="form" />
+    <details class="advanced-settings">
+      <summary>
+        <span>
+          <strong>高级设置</strong>
+          <small>通知、检查频率和提取规则</small>
+        </span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+      </summary>
 
-    <div class="form-group">
+      <div class="advanced-content">
+        <BasicMonitorForm v-model="form.basic" :monitorType="form.monitorType" advanced />
+
+        <ExtractionEditor
+          v-if="form.monitorType === 'presence'"
+          v-model="form.extraction"
+          :url="form.basic.url"
+          advanced
+        />
+        <PriceExtractionEditor v-else :form="form" advanced @update:form="updateForm" />
+        <NumericTransitionRuleEditor
+          v-if="form.monitorType === 'field_transition' && form.rule.transition.operator === 'decreased'"
+          :form="form"
+          advanced
+          @update:form="updateForm"
+        />
+
+        <NotificationEditor
+          v-model="form.notification"
+          :accounts="accounts"
+          :monitorType="form.monitorType"
+        />
+
+        <div class="validation-actions">
+          <div>
+            <strong>检查当前配置</strong>
+            <p>抓取一次网页，确认系统能够读取到所需内容。</p>
+          </div>
+          <button class="btn btn-ghost" type="button" :disabled="validationLoading" @click="$emit('validate')">
+            {{ validationLoading ? '检查中...' : '运行检查' }}
+          </button>
+        </div>
+
+        <MonitorFormSummary :form="form" />
+        <div class="advanced-actions"><slot name="advanced-actions" /></div>
+      </div>
+    </details>
+
+    <div class="start-option">
       <label class="checkbox-label">
         <input type="checkbox" :checked="form.basic.isActive" @change="form.basic.isActive = $event.target.checked" />
-        保存后立即启动监控
+        创建后立即开始监控
       </label>
     </div>
 
@@ -61,7 +89,6 @@ import BasicMonitorForm from './BasicMonitorForm.vue'
 import ExtractionEditor from './ExtractionEditor.vue'
 import PriceExtractionEditor from './PriceExtractionEditor.vue'
 import NumericTransitionRuleEditor from './NumericTransitionRuleEditor.vue'
-import PresenceRuleEditor from './PresenceRuleEditor.vue'
 import NotificationEditor from './NotificationEditor.vue'
 import MonitorValidationPanel from './MonitorValidationPanel.vue'
 import MonitorFormSummary from './MonitorFormSummary.vue'
@@ -90,6 +117,36 @@ function updateForm(newForm) {
   gap: 0;
 }
 
+.advanced-settings {
+  margin-bottom: 1rem;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.advanced-settings > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 0.25rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+.advanced-settings > summary::-webkit-details-marker { display: none; }
+.advanced-settings > summary span { display: grid; gap: 0.1rem; }
+.advanced-settings > summary strong { color: var(--text); font-size: 0.875rem; }
+.advanced-settings > summary small { color: var(--text-muted); font-size: 0.75rem; }
+.advanced-settings > summary svg { width: 16px; height: 16px; flex: 0 0 16px; transition: transform 160ms ease; }
+.advanced-settings[open] > summary svg { transform: rotate(90deg); }
+.advanced-content { padding: 0.5rem 0 0.25rem; }
+.advanced-content :deep(.advanced-panel-section) { padding: 1rem 0; border-bottom: 1px solid var(--border-light); }
+.advanced-content :deep(.settings-section) { margin: 0; padding: 1rem 0; border-bottom: 1px solid var(--border-light); border-radius: 0; background: transparent; }
+.advanced-actions { display: flex; justify-content: flex-start; }
+
+.start-option { margin: 0.25rem 0 1rem; }
+.start-option .checkbox-label { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; cursor: pointer; }
+.start-option input { accent-color: var(--green); }
+
 .validation-actions {
   display: flex;
   align-items: center;
@@ -97,8 +154,8 @@ function updateForm(newForm) {
   gap: 1rem;
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: var(--bg-surface);
-  border-radius: var(--radius-lg);
+  background: transparent;
+  border-radius: 0;
 }
 .validation-actions strong { display: block; color: var(--text); font-size: 0.875rem; }
 .validation-actions p { color: var(--text-muted); font-size: 0.75rem; margin-top: 0.15rem; }
@@ -132,5 +189,12 @@ function updateForm(newForm) {
   justify-content: flex-end;
   align-items: center;
   margin-top: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .validation-actions { align-items: stretch; flex-direction: column; }
+  .validation-actions .btn { width: 100%; }
+  .form-actions { align-items: stretch; flex-direction: column-reverse; }
+  .form-actions :deep(.btn) { width: 100%; justify-content: center; }
 }
 </style>

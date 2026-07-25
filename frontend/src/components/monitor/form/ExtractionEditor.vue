@@ -1,27 +1,28 @@
 <template>
-  <div class="settings-section">
+  <div :class="advanced ? 'advanced-panel-section' : 'settings-section'">
+    <template v-if="!advanced">
     <div class="section-header">
-      <h2>网页内容提取</h2>
+      <h2>想关注什么内容？</h2>
     </div>
 
-    <p class="section-desc">输入关键词，系统自动扫描网页中的列表区域和内容字段。</p>
+    <p class="section-desc">关键词可以留空，系统会自动识别网页中的主要内容列表。</p>
 
     <div class="scan-row">
       <div class="form-group scan-keyword">
-        <label>关键词（多个用逗号隔开）</label>
-        <input v-model="keyword" class="form-input" :placeholder="keywordPlaceholder" @keyup.enter="handleScan" />
+        <label>关注的关键词 <span class="optional-label">可选</span></label>
+        <input v-model="keyword" class="form-input" placeholder="例如：公告、录用、开售" @keyup.enter="handleScan" />
       </div>
       <div class="scan-action">
         <button class="btn btn-primary btn-sm" :disabled="!url || scanning" @click="handleScan">
-          {{ scanning ? '扫描中...' : '预扫描' }}
+          {{ scanning ? '识别中...' : '自动识别内容' }}
         </button>
       </div>
     </div>
 
-    <div class="loading" v-if="scanning"><div class="spinner" /><p>扫描网页内容...</p></div>
+    <div class="loading" v-if="scanning"><div class="spinner" /><p>正在识别网页内容...</p></div>
 
     <div class="scan-results" v-else-if="scanResult && scanResult.containers && scanResult.containers.length > 0">
-      <p class="results-label">发现 {{ scanResult.containers.length }} 个数据区域，选择一个应用：</p>
+      <p class="results-label">找到了 {{ scanResult.containers.length }} 个可能的内容区域，请选择最符合的一项：</p>
       <div
         v-for="(container, ci) in scanResult.containers"
         :key="ci"
@@ -31,17 +32,11 @@
       >
         <div class="candidate-header">
           <div class="candidate-info">
-            <span class="candidate-badge">{{ container.container_tag.toUpperCase() }}</span>
-            <span class="candidate-count">{{ container.item_count }} 条</span>
-            <span class="candidate-hit" v-if="container.keyword_hits">命中 {{ container.keyword_hits }} 个关键词</span>
-            <span class="candidate-strategy" :class="strategyClass(container.strategy)" v-if="container.strategy">{{ strategyLabel(container.strategy) }}</span>
+            <span class="candidate-badge">内容区域 {{ ci + 1 }}</span>
+            <span class="candidate-count">发现 {{ container.item_count }} 条内容</span>
+            <span class="candidate-hit" v-if="container.keyword_hits">{{ container.keyword_hits }} 条与关键词相关</span>
           </div>
-          <button class="btn btn-sm btn-primary apply-btn" type="button" @click.stop="applyCandidate(container)">应用</button>
-        </div>
-        <div class="candidate-selector">
-          <code>{{ container.config?.container || container.container_css }}</code>
-          <span class="selector-sep"> / </span>
-          <code>{{ container.config?.item || container.item_css || '单项' }}</code>
+          <button class="btn btn-sm btn-primary apply-btn" type="button" @click.stop="applyCandidate(container)">选择此区域</button>
         </div>
         <div class="candidate-samples">
           <div v-for="(item, ii) in (container.sample_items || []).slice(0, 5)" :key="ii" class="sample-item">
@@ -55,17 +50,19 @@
     </div>
 
     <div class="empty-scan" v-else-if="scanned">
-      <p>未找到匹配内容，试试不同关键词或展开高级设置手动配置选择器</p>
+      <p>暂时没有识别到合适的内容。可以换个关键词重试，或在高级设置中手动配置。</p>
     </div>
 
     <div class="form-error" v-if="scanError">{{ scanError }}</div>
 
-    <div class="advanced-toggle" @click="showAdvanced = !showAdvanced">
-      <svg :class="{ rotated: showAdvanced }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
-      <span>高级设置</span>
+    <div v-if="modelValue.containerSelector" class="selection-confirmed">
+      已选定网页内容区域
     </div>
+    </template>
 
-    <div class="manual-section" v-if="showAdvanced">
+    <div class="manual-section" v-else>
+      <h3>网页提取规则</h3>
+      <p class="advanced-section-desc">仅在自动识别不准确时修改这些技术选项。</p>
       <div class="form-group">
         <label>数据源</label>
         <select :value="modelValue.sourceMode || 'html'" @change="updateSourceMode($event.target.value)" class="form-input">
@@ -180,6 +177,7 @@ import { previewScan } from '../../../api/monitors'
 const props = defineProps({
   modelValue: { type: Object, required: true },
   url: { type: String, default: '' },
+  advanced: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -189,7 +187,6 @@ const scanResult = ref(null)
 const scanned = ref(false)
 const scanError = ref(null)
 const selectedIndex = ref(null)
-const showAdvanced = ref(false)
 
 function strategyLabel(strategy) {
   if (!strategy) return ''
@@ -223,6 +220,11 @@ async function handleScan() {
     })
     if (res.code === 0 && res.data) {
       scanResult.value = res.data
+      if (res.data.containers?.length === 1) {
+        applyCandidate(res.data.containers[0])
+        scanning.value = false
+        return
+      }
     } else {
       scanError.value = res.message || '扫描失败'
     }
@@ -308,6 +310,10 @@ function removeField(index) {
 <style scoped>
 .section-header { margin-bottom: 0.5rem; }
 .section-desc { font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 1rem; }
+.optional-label { color: var(--text-muted); font-size: 0.6875rem; font-weight: 500; text-transform: none; }
+.advanced-panel-section h3 { margin-bottom: 0.2rem; color: var(--text); font-size: 0.875rem; }
+.advanced-section-desc { margin-bottom: 1rem; color: var(--text-muted); font-size: 0.75rem; }
+.selection-confirmed { margin-top: 0.75rem; padding: 0.65rem 0.75rem; border-left: 3px solid var(--success); background: var(--success-bg); color: var(--success); font-size: 0.8125rem; font-weight: 700; }
 
 .scan-row {
   display: flex;

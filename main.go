@@ -41,6 +41,11 @@ func main() {
 	}
 
 	monitor.InitScanRules(os.Getenv("SCAN_RULES_FILE"))
+	if upgraded, err := monitor.UpgradeKnownReusablePriceRules(); err != nil {
+		log.Printf("[ScannerRules] 升级旧版价格规则失败: %v", err)
+	} else if upgraded > 0 {
+		log.Printf("[ScannerRules] 已将 %d 条旧版价格规则升级为跨商品规则", upgraded)
+	}
 
 	// 2. 从数据库加载并启动所有活跃的监控器
 	monitor.StartAllFromDB()

@@ -2,12 +2,15 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
 	"github.com/cn-maul/Gentry/database"
+	"github.com/cn-maul/Gentry/fetcher"
 )
 
 func TestExtractConfiguredJSONSourceFiltersAndProjectsSKUFields(t *testing.T) {
@@ -191,5 +194,32 @@ func TestSmartScanUsesSavedJSONRuleWithoutFetchingProductPage(t *testing.T) {
 	}
 	if candidate.ItemCount != 1 || candidate.SampleItems[0]["price"] != "30.00" {
 		t.Fatalf("unexpected API candidate: %+v", candidate)
+	}
+}
+
+func TestJSONScanCandidateIncludesEveryExtractedPrice(t *testing.T) {
+	items := make([]map[string]interface{}, 12)
+	for index := range items {
+		items[index] = map[string]interface{}{"sku": fmt.Sprintf("SKU-%d", index), "price": fmt.Sprintf("%d.00", index+1)}
+	}
+	body, err := json.Marshal(map[string]interface{}{"data": items})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+	candidate, err := buildJSONScanCandidate(
+		"test", "test", FetchConfig{Mode: FetchModeAPIJSON, URL: server.URL, ItemsPath: "data"},
+		"https://shop.example/products/item",
+		[]database.ScanRuleField{{Name: "sku", Selector: "sku"}, {Name: "price", Selector: "price"}},
+		fetcher.New(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if candidate.ItemCount != 12 || len(candidate.SampleItems) != 12 {
+		t.Fatalf("count=%d samples=%d, want all 12", candidate.ItemCount, len(candidate.SampleItems))
 	}
 }

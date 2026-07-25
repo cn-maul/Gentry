@@ -564,14 +564,10 @@ func buildJSONScanCandidate(strategy, diagnostic string, config FetchConfig, sou
 		return ContainerInfo{}, err
 	}
 	fieldConfigs := scanRuleFieldsToConfigFields(fields)
-	limit := len(items)
-	if limit > 10 {
-		limit = 10
-	}
 	return ContainerInfo{
 		Selector: config.ItemsPath, ContainerTag: "JSON", ContainerCSS: config.ItemsPath,
 		ItemTag: "OBJECT", ItemCSS: "*", ItemCount: len(items), KeywordHits: 1,
-		SampleItems: items[:limit], Strategy: strategy, Confidence: 100,
+		SampleItems: items, Strategy: strategy, Confidence: 100,
 		Diagnostics: []string{diagnostic, fmt.Sprintf("JSON API 提取到 %d 个条目", len(items))},
 		Config:      ScanMonitorConfig{Container: config.ItemsPath, Item: "*", Fields: fieldConfigs, Fetch: &config},
 	}, nil

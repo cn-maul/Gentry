@@ -49,6 +49,26 @@ export function createEmptyForm() {
   }
 }
 
+export function suggestMonitorName(url, monitorType = 'presence') {
+  const suffix = monitorType === 'field_transition' ? '价格' : '网页'
+  try {
+    const hostname = new URL((url || '').trim()).hostname.replace(/^www\./, '')
+    return hostname ? `${hostname} ${suffix}` : `未命名${suffix}监控`
+  } catch {
+    return `未命名${suffix}监控`
+  }
+}
+
+export function suggestedScanRuleScope(url, monitorType = 'presence') {
+  if (monitorType !== 'field_transition') return 'exact'
+  try {
+    const segments = new URL((url || '').trim()).pathname.split('/').filter(Boolean)
+    return segments.length > 1 ? 'section' : 'exact'
+  } catch {
+    return 'exact'
+  }
+}
+
 export function toMonitorRequest(form) {
   const payload = {
     name: form.basic.name.trim(),

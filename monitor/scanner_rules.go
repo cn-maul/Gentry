@@ -133,6 +133,116 @@ func ApplyExactScanRuleScope(rule *database.ScanRuleTemplate, rawURL string) err
 	return ApplyScanRuleScope(rule, rawURL, ScanRuleScopeExact)
 }
 
+// GeneralizeKnownPriceRule upgrades the legacy Digitalychee SKU rule that was
+// saved against one product into a reusable rule for sibling product pages.
+func GeneralizeKnownPriceRule(rule *database.ScanRuleTemplate) (bool, error) {
+	if rule == nil || strings.TrimSpace(rule.FetchConfig) == "" {
+		return false, nil
+	}
+	source, err := normalizeScanRuleURL(rule.SourceURL)
+	if err != nil || source.host != "lizhi.shop" || !strings.HasPrefix(source.path, "/products/") {
+		return false, nil
+	}
+	config, err := ParseFetchConfig(rule.FetchConfig, rule.SourceURL)
+	if err != nil || config.Mode != FetchModeAPIJSON {
+		return false, err
+	}
+	apiURL, err := url.Parse(config.URL)
+	if err != nil || !strings.EqualFold(apiURL.Hostname(), "lizhi.shop") || apiURL.Path != "/site/goods_skus" {
+		return false, nil
+	}
+	if strings.TrimSpace(apiURL.Query().Get("goods_id")) == "" {
+		return false, nil
+	}
+
+	changed := false
+	queryParts := strings.Split(apiURL.RawQuery, "&")
+	for index, part := range queryParts {
+		name, _, _ := strings.Cut(part, "=")
+		decodedName, _ := url.QueryUnescape(name)
+		if decodedName == "goods_id" && part != "goods_id={{goods_id}}" {
+			queryParts[index] = "goods_id={{goods_id}}"
+			changed = true
+		}
+	}
+	apiURL.RawQuery = strings.Join(queryParts, "&")
+	if config.URL != apiURL.String() {
+		config.URL = apiURL.String()
+		changed = true
+	}
+	if config.Headers == nil {
+		config.Headers = map[string]string{}
+	}
+	if config.Headers["Referer"] != "{{page_url}}" {
+		config.Headers["Referer"] = "{{page_url}}"
+		changed = true
+	}
+	if config.Variables == nil {
+		config.Variables = map[string]FetchVariable{}
+	}
+	variable := FetchVariable{Source: "html", Selector: "#goods_id", Attr: "value"}
+	if config.Variables["goods_id"] != variable {
+		config.Variables["goods_id"] = variable
+		changed = true
+	}
+
+	previousScope := rule.ScopeType
+	previousHost := rule.MatchHost
+	previousPath := rule.MatchPath
+	previousQuery := rule.MatchQuery
+	if err := ApplyScanRuleScope(rule, rule.SourceURL, ScanRuleScopeSection); err != nil {
+		return false, err
+	}
+	if previousScope != rule.ScopeType || previousHost != rule.MatchHost || previousPath != rule.MatchPath || previousQuery != rule.MatchQuery {
+		changed = true
+	}
+	if !changed {
+		return false, nil
+	}
+	encoded, err := json.Marshal(config)
+	if err != nil {
+		return false, err
+	}
+	rule.FetchConfig = string(encoded)
+	return true, nil
+}
+
+// UpgradeKnownReusablePriceRules repairs persisted rules created before page
+// variables and directory scopes were available.
+func UpgradeKnownReusablePriceRules() (int, error) {
+	db := database.GetDB()
+	if db == nil {
+		return 0, nil
+	}
+	var rules []database.ScanRuleTemplate
+	if err := db.Where("fetch_config <> ''").Find(&rules).Error; err != nil {
+		return 0, err
+	}
+	upgraded := 0
+	for index := range rules {
+		changed, err := GeneralizeKnownPriceRule(&rules[index])
+		if err != nil {
+			return upgraded, err
+		}
+		if !changed {
+			continue
+		}
+		updates := map[string]interface{}{
+			"source_url":   rules[index].SourceURL,
+			"scope_type":   rules[index].ScopeType,
+			"match_host":   rules[index].MatchHost,
+			"match_path":   rules[index].MatchPath,
+			"match_query":  rules[index].MatchQuery,
+			"fetch_config": rules[index].FetchConfig,
+		}
+		if err := db.Model(&database.ScanRuleTemplate{}).Where("id = ?", rules[index].ID).Updates(updates).Error; err != nil {
+			return upgraded, err
+		}
+		upgraded++
+	}
+	return upgraded, nil
+}
+
 // ScanRuleMatchesURL keeps legacy URLContains rules working while scoped rules
 // use normalized host, path and query equality.
 func ScanRuleMatchesURL(rule database.ScanRuleTemplate, rawURL string) bool {

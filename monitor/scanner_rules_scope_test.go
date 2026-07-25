@@ -1,10 +1,49 @@
 package monitor
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cn-maul/Gentry/database"
 )
+
+func TestGeneralizeLegacyLizhiPriceRule(t *testing.T) {
+	rule := database.ScanRuleTemplate{
+		SourceURL: "https://lizhi.shop/products/adguard",
+		ScopeType: ScanRuleScopeExact,
+		MatchHost: "lizhi.shop",
+		MatchPath: "/products/adguard",
+		FetchConfig: `{"mode":"api_json","url":"https://lizhi.shop/site/goods_skus?goods_id=31","items_path":"data",` +
+			`"filter_path":"is_selling","filter_equals":"true","headers":{"X-Requested-With":"XMLHttpRequest"}}`,
+	}
+	changed, err := GeneralizeKnownPriceRule(&rule)
+	if err != nil {
+		t.Fatalf("generalize rule: %v", err)
+	}
+	if !changed {
+		t.Fatal("legacy rule should be upgraded")
+	}
+	if rule.ScopeType != ScanRuleScopeSection || rule.MatchPath != "/products" {
+		t.Fatalf("unexpected scope: type=%q path=%q", rule.ScopeType, rule.MatchPath)
+	}
+	if !ScanRuleMatchesURL(rule, "https://lizhi.shop/products/baimiao") {
+		t.Fatal("upgraded rule should match a sibling product")
+	}
+	config, err := ParseFetchConfig(rule.FetchConfig, rule.SourceURL)
+	if err != nil {
+		t.Fatalf("parse upgraded fetch config: %v", err)
+	}
+	if !strings.Contains(config.URL, "goods_id={{goods_id}}") {
+		t.Fatalf("API URL was not generalized: %s", config.URL)
+	}
+	if config.Headers["Referer"] != "{{page_url}}" || config.Variables["goods_id"].Selector != "#goods_id" {
+		t.Fatalf("dynamic page context missing: %+v", config)
+	}
+	changed, err = GeneralizeKnownPriceRule(&rule)
+	if err != nil || changed {
+		t.Fatalf("generalization should be idempotent: changed=%t err=%v", changed, err)
+	}
+}
 
 func TestExactScanRuleScopeIsolatesPathHostAndQuery(t *testing.T) {
 	rule := database.ScanRuleTemplate{}

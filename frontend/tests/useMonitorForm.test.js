@@ -6,9 +6,23 @@ import {
   fromMonitorResponse,
   getDetectionFingerprint,
   hasSemanticChange,
+  suggestMonitorName,
+  suggestedScanRuleScope,
   toMonitorRequest,
   validateForm,
 } from '../src/composables/useMonitorForm.js'
+
+test('suggests a readable name from the URL when the user leaves it blank', () => {
+  assert.equal(suggestMonitorName('https://www.example.com/products/1', 'field_transition'), 'example.com 价格')
+  assert.equal(suggestMonitorName('https://notice.example.cn/list', 'presence'), 'notice.example.cn 网页')
+  assert.equal(suggestMonitorName('', 'presence'), '未命名网页监控')
+})
+
+test('suggests a reusable directory scope for product price rules', () => {
+  assert.equal(suggestedScanRuleScope('https://lizhi.shop/products/adguard', 'field_transition'), 'section')
+  assert.equal(suggestedScanRuleScope('https://example.com/product', 'field_transition'), 'exact')
+  assert.equal(suggestedScanRuleScope('https://lizhi.shop/products/adguard', 'presence'), 'exact')
+})
 
 function validPriceForm() {
   const form = createEmptyForm()

@@ -165,7 +165,11 @@
             <span class="snap-col snap-time">最后更新</span>
           </div>
           <div class="snapshot-row" v-for="snap in snapshots" :key="snap.id || snap.item_key">
-            <span class="snap-col snap-key" :title="snap.item_key">{{ snap.item_key }}</span>
+            <span class="snap-col snap-key snapshot-identity" :title="snap.item_title ? `${snap.item_title} (${snap.item_key})` : snap.item_key">
+              <strong v-if="snap.item_title">{{ snap.item_title }}</strong>
+              <code v-if="snap.item_title && snap.item_key !== snap.item_title">{{ snap.item_key }}</code>
+              <span v-else>{{ snap.item_key }}</span>
+            </span>
             <span class="snap-col snap-price">{{ snap.price_display || '—' }}</span>
             <span class="snap-col snap-currency">{{ snap.currency || '—' }}</span>
             <span class="snap-col snap-valid">
@@ -550,6 +554,10 @@ async function handleManualCheck() {
 .snapshot-header { background: transparent; font-weight: 700; font-size: 0.6875rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; }
 .snap-col { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snap-key { flex: 2; }
+.snapshot-identity { display: grid; gap: 0.1rem; }
+.snapshot-identity strong, .snapshot-identity code, .snapshot-identity > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snapshot-identity strong { color: var(--text); font-size: 0.8125rem; }
+.snapshot-identity code { color: var(--text-muted); font-size: 0.6875rem; }
 .snap-price { flex: 1; font-weight: 700; font-variant-numeric: tabular-nums; }
 .snap-currency { flex: 0.5; color: var(--text-muted); }
 .snap-valid { flex: 0.5; display: flex; align-items: center; gap: 0.3rem; }
