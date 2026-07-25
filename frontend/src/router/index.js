@@ -4,6 +4,7 @@ import AddMonitor from '../views/AddMonitor.vue'
 import MonitorDetail from '../views/MonitorDetail.vue'
 import PushManagement from '../views/PushManagement.vue'
 import ScanRuleManagement from '../views/ScanRuleManagement.vue'
+import Settings from '../views/Settings.vue'
 
 const routes = [
   { path: '/', name: 'dashboard', component: Dashboard },
@@ -12,6 +13,7 @@ const routes = [
   { path: '/monitor/:name', name: 'monitor-detail', component: MonitorDetail, props: true },
   { path: '/push', name: 'push-management', component: PushManagement },
   { path: '/scan-rules', name: 'scan-rule-management', component: ScanRuleManagement },
+  { path: '/settings', name: 'settings', component: Settings },
 ]
 
 const router = createRouter({

@@ -75,11 +75,14 @@ func (s *WebServer) setupRoutes() {
 
 	// 推送服务供应商元数据（供前端展示字段标签和校验）
 	authenticated.GET("/settings/notification-providers", s.listNotificationProviders)
+	authenticated.GET("/update/status", s.getUpdateStatus)
+	authenticated.POST("/update/apply", s.applyUpdate)
+	authenticated.GET("/update/proxy", s.getUpdateProxy)
+	authenticated.PUT("/update/proxy", s.setUpdateProxy)
 
-	// 更新接口（无需认证，用于版本检查）
+	// 版本信息和检查不修改本地状态，可以公开访问。
 	s.engine.GET("/api/version", s.getVersion)
 	s.engine.GET("/api/update/check", s.checkUpdate)
-	authenticated.POST("/api/update/apply", s.applyUpdate)
 
 	if s.frontendFS != nil {
 		assets, err := fs.Sub(s.frontendFS, "assets")

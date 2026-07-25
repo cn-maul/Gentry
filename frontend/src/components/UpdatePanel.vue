@@ -1,30 +1,34 @@
 <template>
   <div class="update-panel">
-    <button class="version-btn" :disabled="checking" @click="handleClick">
+    <button class="version-btn" :disabled="checking || state === 'downloading' || state === 'restarting'" @click="handleClick">
       <span v-if="state === 'idle'">{{ version }}</span>
       <span v-else-if="state === 'checking'">检查中...</span>
       <span v-else-if="state === 'uptodate'">已是最新</span>
       <span v-else-if="state === 'error'">检查失败</span>
+      <span v-else-if="state === 'downloading'">下载更新中...</span>
+      <span v-else-if="state === 'restarting'">即将重启...</span>
+      <span v-else-if="state === 'failed'">{{ errorMsg || '更新失败' }}</span>
     </button>
 
     <div class="update-actions" v-if="state === 'available'">
-      <button class="update-btn" :disabled="updating" @click="handleUpdate">
-        {{ updating ? '更新中...' : '升级到 ' + latestVersion }}
-      </button>
-      <div class="progress-bar" v-if="updating"><div class="progress-fill fill-anim" /></div>
+      <button class="update-btn" @click="handleUpdate">升级到 {{ latestVersion }}</button>
+    </div>
+    <div class="update-actions" v-if="state === 'downloading'">
+      <div class="progress-bar"><div class="progress-fill fill-anim" /></div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { fetchVersion, checkUpdate, applyUpdate } from '../api/monitors'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { fetchVersion, checkUpdate, applyUpdate, fetchUpdateStatus } from '../api/monitors'
 
 const version = ref('')
-const state = ref('idle') // idle | checking | uptodate | available | error
+const state = ref('idle')
 const latestVersion = ref('')
 const downloadURL = ref('')
-const updating = ref(false)
+const errorMsg = ref('')
+let statusTimer = null
 
 onMounted(async () => {
   try {
@@ -33,6 +37,10 @@ onMounted(async () => {
       version.value = res.data.version
     }
   } catch {}
+})
+
+onUnmounted(() => {
+  if (statusTimer) clearInterval(statusTimer)
 })
 
 async function handleClick() {
@@ -60,12 +68,37 @@ async function handleClick() {
 
 async function handleUpdate() {
   if (!downloadURL.value) return
-  updating.value = true
+  state.value = 'downloading'
   try {
-    await applyUpdate(downloadURL.value)
+    await applyUpdate()
+    pollStatus()
   } catch {
-    updating.value = false
+    state.value = 'failed'
+    errorMsg.value = '请求失败'
+    setTimeout(() => { state.value = 'idle' }, 3000)
   }
+}
+
+function pollStatus() {
+  statusTimer = setInterval(async () => {
+    try {
+      const res = await fetchUpdateStatus()
+      if (res.code === 0 && res.data) {
+        if (res.data.status === 'done') {
+          state.value = 'restarting'
+          clearInterval(statusTimer)
+        } else if (res.data.status === 'error') {
+          errorMsg.value = res.data.message || '更新失败'
+          state.value = 'failed'
+          clearInterval(statusTimer)
+          setTimeout(() => { state.value = 'idle' }, 5000)
+        }
+      }
+    } catch {
+      state.value = 'restarting'
+      clearInterval(statusTimer)
+    }
+  }, 2000)
 }
 </script>
 

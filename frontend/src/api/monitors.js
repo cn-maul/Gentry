@@ -227,9 +227,21 @@ export function fetchVersion() {
 }
 
 export function checkUpdate() {
-  return rootClient.get('/update/check').then(r => r.data)
+  return rootClient.get('/update/check', { timeout: 25000 }).then(r => r.data)
 }
 
-export function applyUpdate(downloadURL) {
-  return rootClient.post('/update/apply', { download_url: downloadURL }).then(r => r.data)
+export function applyUpdate() {
+  return rootClient.post('/update/apply').then(r => r.data)
+}
+
+export function fetchUpdateStatus() {
+  return rootClient.get('/update/status').then(r => r.data)
+}
+
+export function fetchUpdateProxy() {
+  return rootClient.get('/update/proxy').then(r => r.data)
+}
+
+export function setUpdateProxy(proxy) {
+  return rootClient.put('/update/proxy', { proxy }).then(r => r.data)
 }
