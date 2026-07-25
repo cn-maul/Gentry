@@ -24,6 +24,7 @@ func newDefaultConfig() *config {
 			Transport: &http.Transport{
 				MaxIdleConns:        100,
 				MaxIdleConnsPerHost: 20,
+				ForceAttemptHTTP2:   true,
 			},
 		},
 		userAgent: defaultUserAgent,

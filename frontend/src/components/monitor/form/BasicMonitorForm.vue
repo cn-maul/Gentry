@@ -1,13 +1,13 @@
 <template>
   <div class="settings-section">
-    <div class="section-header"><h2>基础配置</h2></div>
+    <div class="section-header"><h2>{{ monitorType === 'field_transition' ? '商品信息' : '网页信息' }}</h2></div>
     <div class="form-group">
       <label>名称</label>
-      <input :value="modelValue.name" @input="update('name', $event.target.value)" class="form-input" placeholder="如 招录公告" />
+      <input :value="modelValue.name" @input="update('name', $event.target.value)" class="form-input" :placeholder="monitorType === 'field_transition' ? '如 AdGuard 套餐价格' : '如 招录公告'" />
     </div>
     <div class="form-group">
-      <label>URL</label>
-      <input :value="modelValue.url" @input="update('url', $event.target.value)" class="form-input" placeholder="https://example.com/announce/" />
+      <label>{{ monitorType === 'field_transition' ? '商品页面 URL' : '网页 URL' }}</label>
+      <input :value="modelValue.url" @input="update('url', $event.target.value)" class="form-input" :placeholder="monitorType === 'field_transition' ? 'https://shop.example/products/item' : 'https://example.com/announce/'" />
     </div>
     <div class="form-group">
       <label>分组</label>
@@ -23,6 +23,7 @@
 <script setup>
 const props = defineProps({
   modelValue: { type: Object, required: true },
+  monitorType: { type: String, default: 'presence' },
 })
 const emit = defineEmits(['update:modelValue'])
 

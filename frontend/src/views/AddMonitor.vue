@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <router-link to="/" class="back-btn">← 返回</router-link>
-        <h1>{{ isEdit ? '编辑监控器' : '新增监控器' }}</h1>
+        <h1>{{ pageTitle }}</h1>
       </div>
     </div>
 
@@ -25,9 +25,10 @@
         :showBaselineWarning="baselineWarning"
         @validate="runValidation"
         @update:form="onFormUpdate"
+        @change:type="changeMonitorType"
       >
         <template #actions>
-          <button v-if="!isEdit" class="btn btn-ghost btn-sm" @click="handleSaveAsRule" :disabled="submitting" style="margin-right: auto;">另存为规则模板</button>
+          <button v-if="!isEdit" class="btn btn-ghost btn-sm" @click="handleSaveAsRule" :disabled="submitting" style="margin-right: auto;">{{ form.monitorType === 'field_transition' ? '另存为价格规则' : '另存为网页规则' }}</button>
           <button class="btn btn-primary" :disabled="submitting" @click="handleSubmit">
             {{ submitting ? '提交中...' : (isEdit ? '保存修改' : '创建并启动') }}
           </button>
@@ -40,7 +41,7 @@
 <script setup>
 import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { createMonitor, updateMonitor, fetchMonitorConfig, fetchAccounts, createScanRule, validateMonitorConfig } from '../api/monitors'
+import { createMonitor, updateMonitor, fetchMonitorConfig, fetchAccounts, quickCreateScanRule, validateMonitorConfig } from '../api/monitors'
 import MonitorForm from '../components/monitor/form/MonitorForm.vue'
 import { createEmptyForm, toMonitorRequest, fromMonitorResponse, hasSemanticChange, validateForm, getDetectionFingerprint } from '../composables/useMonitorForm'
 import { useToastMessages } from '../composables/useToastMessages'
@@ -56,6 +57,15 @@ const submitError = ref(null)
 
 const form = reactive(createEmptyForm())
 const originalFormSnapshot = ref(null)
+const workflowDrafts = {
+  presence: null,
+  field_transition: null,
+}
+
+const pageTitle = computed(() => {
+  const typeName = form.monitorType === 'field_transition' ? '商品价格监控' : '网页监控'
+  return `${isEdit.value ? '编辑' : '新增'}${typeName}`
+})
 
 const accounts = ref([])
 
@@ -72,6 +82,31 @@ function onFormUpdate(newForm) {
   Object.assign(form, newForm)
 }
 
+function workflowState(source) {
+  return JSON.parse(JSON.stringify({ extraction: source.extraction, rule: source.rule }))
+}
+
+function changeMonitorType(nextType) {
+  if (nextType === form.monitorType) return
+  workflowDrafts[form.monitorType] = workflowState(form)
+  const stored = workflowDrafts[nextType]
+  const next = stored || workflowState(createEmptyForm())
+  form.extraction = next.extraction
+  form.rule = next.rule
+  if (nextType === 'field_transition' && !form.extraction.containerSelector.trim()) {
+    form.extraction.containerSelector = 'body'
+  }
+  if (nextType === 'field_transition') {
+    const titleField = form.extraction.fields.find(field => field.name === 'title')
+    if (titleField?.selector === 'a') titleField.selector = 'h1'
+  }
+  form.monitorType = nextType
+  submitError.value = null
+  validationResult.value = null
+  validatedFingerprint.value = ''
+  validationAttemptFingerprint.value = ''
+}
+
 // Watch for semantic changes in edit mode
 watch(() => form.monitorType, (monitorType) => {
   if (monitorType === 'field_transition') {
@@ -82,6 +117,19 @@ watch(() => form.monitorType, (monitorType) => {
     ensurePriceField()
   }
 })
+
+watch(
+  () => [form.monitorType, form.extraction.sourceMode, form.extraction.itemSelector, form.extraction.fields.map(field => field.name).join('|')],
+  () => {
+    if (form.monitorType !== 'field_transition') return
+    const isList = form.extraction.sourceMode === 'api_json' || Boolean(form.extraction.itemSelector.trim())
+    form.rule.pageMode = isList ? 'list' : 'single'
+    if (isList && form.rule.identity.mode === 'source_url') {
+      const identityField = form.extraction.fields.find(field => ['sku', 'products_no', 'id', 'url'].includes(field.name))
+      if (identityField) form.rule.identity = { mode: 'field', field: identityField.name }
+    }
+  },
+)
 
 function ensurePriceField() {
   if (form.monitorType !== 'field_transition') return
@@ -206,20 +254,29 @@ async function handleSubmit() {
 
 async function handleSaveAsRule() {
   if (!form.extraction.containerSelector) return
-  const name = prompt('规则名称（如 澎湃快讯时间线）', form.basic.name.trim() + ' 规则')
+  const example = form.monitorType === 'field_transition' ? '商城商品 SKU' : '公告列表'
+  const name = prompt(`规则名称（如 ${example}）`, form.basic.name.trim() + ' 规则')
   if (!name) return
   try {
-    await createScanRule({
+    await quickCreateScanRule({
       name,
-      url_contains: new URL(form.basic.url).hostname,
-      container: form.extraction.containerSelector,
-      item: form.extraction.itemSelector,
-      priority: 50,
-      enabled: true,
-      description: '从表单保存',
-      fields: form.extraction.fields.filter(f => f.name).map(f => ({
-        name: f.name, selector: f.selector, type: f.type, attr: f.attr || '', transform: f.transform || '',
-      })),
+      url: form.basic.url,
+      scope_type: 'exact',
+      config: {
+        container: form.extraction.containerSelector,
+        item: form.extraction.itemSelector,
+        fetch_config: form.extraction.sourceMode === 'api_json' ? {
+          mode: 'api_json',
+          url: form.extraction.sourceUrl,
+          items_path: form.extraction.itemsPath,
+          filter_path: form.extraction.filterPath,
+          filter_equals: String(form.extraction.filterEquals ?? ''),
+          headers: form.extraction.sourceHeaders || {},
+        } : undefined,
+        fields: form.extraction.fields.filter(f => f.name).map(f => ({
+          name: f.name, selector: f.selector, type: f.type, attr: f.attr || '', transform: f.transform || '',
+        })),
+      },
     })
     showSuccess('规则已保存')
   } catch (e) {

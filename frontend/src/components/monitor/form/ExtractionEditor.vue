@@ -1,10 +1,10 @@
 <template>
   <div class="settings-section">
     <div class="section-header">
-      <h2>网站内容检测</h2>
+      <h2>网页内容提取</h2>
     </div>
 
-    <p class="section-desc">输入关键词，系统自动扫描网页中的列表区域和字段，帮助快速配置提取规则。</p>
+    <p class="section-desc">输入关键词，系统自动扫描网页中的列表区域和内容字段。</p>
 
     <div class="scan-row">
       <div class="form-group scan-keyword">
@@ -45,8 +45,9 @@
         </div>
         <div class="candidate-samples">
           <div v-for="(item, ii) in (container.sample_items || []).slice(0, 5)" :key="ii" class="sample-item">
-            <span class="sample-title">{{ item.title }}</span>
-            <span class="sample-meta" v-if="item.date">{{ item.date }}</span>
+            <span class="sample-title">{{ item.title || item.sku || '未命名条目' }}</span>
+            <span class="sample-meta" v-if="item.price">{{ item.price }}</span>
+            <span class="sample-meta" v-else-if="item.date">{{ item.date }}</span>
           </div>
           <div class="sample-more" v-if="container.item_count > 5">...还有 {{ container.item_count - 5 }} 条</div>
         </div>
@@ -66,12 +67,59 @@
 
     <div class="manual-section" v-if="showAdvanced">
       <div class="form-group">
-        <label>容器选择器</label>
+        <label>数据源</label>
+        <select :value="modelValue.sourceMode || 'html'" @change="updateSourceMode($event.target.value)" class="form-input">
+          <option value="html">网页 HTML</option>
+          <option value="api_json">公开 JSON API</option>
+        </select>
+      </div>
+
+      <template v-if="modelValue.sourceMode === 'api_json'">
+        <div class="source-grid">
+          <div class="form-group source-url">
+            <label>JSON API URL</label>
+            <input :value="modelValue.sourceUrl" @input="update('sourceUrl', $event.target.value)" class="form-input" placeholder="https://example.com/api/products" />
+          </div>
+          <div class="form-group">
+            <label>列表路径</label>
+            <input :value="modelValue.itemsPath" @input="update('itemsPath', $event.target.value)" class="form-input" placeholder="data.items" />
+          </div>
+          <div class="form-group">
+            <label>过滤字段（可选）</label>
+            <input :value="modelValue.filterPath" @input="update('filterPath', $event.target.value)" class="form-input" placeholder="is_selling" />
+          </div>
+          <div class="form-group">
+            <label>过滤值</label>
+            <input :value="modelValue.filterEquals" @input="update('filterEquals', $event.target.value)" class="form-input" placeholder="true" />
+          </div>
+        </div>
+        <div class="header-grid">
+          <div class="form-group">
+            <label>Accept</label>
+            <input :value="modelValue.sourceHeaders?.Accept || ''" @input="updateSourceHeader('Accept', $event.target.value)" class="form-input" placeholder="application/json" />
+          </div>
+          <div class="form-group">
+            <label>Accept-Language</label>
+            <input :value="modelValue.sourceHeaders?.['Accept-Language'] || ''" @input="updateSourceHeader('Accept-Language', $event.target.value)" class="form-input" placeholder="zh-CN,zh;q=0.9" />
+          </div>
+          <div class="form-group">
+            <label>Referer</label>
+            <input :value="modelValue.sourceHeaders?.Referer || ''" @input="updateSourceHeader('Referer', $event.target.value)" class="form-input" :placeholder="url || 'https://example.com/product'" />
+          </div>
+          <div class="form-group">
+            <label>X-Requested-With</label>
+            <input :value="modelValue.sourceHeaders?.['X-Requested-With'] || ''" @input="updateSourceHeader('X-Requested-With', $event.target.value)" class="form-input" placeholder="XMLHttpRequest" />
+          </div>
+        </div>
+      </template>
+
+      <div class="form-group">
+        <label>{{ modelValue.sourceMode === 'api_json' ? '列表路径（兼容字段）' : '容器选择器' }}</label>
         <input :value="modelValue.containerSelector" @input="update('containerSelector', $event.target.value)" class="form-input" placeholder="如 div.hap_infoBox" />
       </div>
 
       <div class="form-group">
-        <label>列表项选择器（可选）</label>
+        <label>{{ modelValue.sourceMode === 'api_json' ? '条目表达式' : '列表项选择器（可选）' }}</label>
         <input :value="modelValue.itemSelector" @input="update('itemSelector', $event.target.value)" class="form-input" placeholder="如 div.hap_infoOne" />
       </div>
 
@@ -92,7 +140,7 @@
                 <input :value="field.name" @input="updateField(index, 'name', $event.target.value)" class="form-input" placeholder="如 title" />
               </div>
               <div class="form-group">
-                <label>选择器</label>
+                <label>{{ modelValue.sourceMode === 'api_json' ? 'JSON 路径' : '选择器' }}</label>
                 <input :value="field.selector" @input="updateField(index, 'selector', $event.target.value)" class="form-input" placeholder="如 a.title" />
               </div>
               <div class="form-group">
@@ -132,7 +180,6 @@ import { previewScan } from '../../../api/monitors'
 const props = defineProps({
   modelValue: { type: Object, required: true },
   url: { type: String, default: '' },
-  monitorType: { type: String, default: 'presence' },
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -157,12 +204,10 @@ function strategyLabel(strategy) {
 }
 
 function strategyClass(strategy) {
-  return strategy?.startsWith('template_') ? 'strategy-rule' : 'strategy-heuristic'
+  return strategy?.startsWith('template_') || strategy?.startsWith('rule_') ? 'strategy-rule' : 'strategy-heuristic'
 }
 
-const keywordPlaceholder = computed(() => {
-  return props.monitorType === 'field_transition' ? '价格,售价,优惠' : '公告,通知,公示'
-})
+const keywordPlaceholder = computed(() => '公告,通知,公示')
 
 async function handleScan() {
   if (!props.url) return
@@ -174,6 +219,7 @@ async function handleScan() {
     const res = await previewScan({
       url: props.url.trim(),
       keywords: keyword.value || keywordPlaceholder.value,
+      strategy_type: 'presence',
     })
     if (res.code === 0 && res.data) {
       scanResult.value = res.data
@@ -197,6 +243,21 @@ function applyCandidate(container) {
     containerSelector: config.container || container.container_css || '',
     itemSelector: config.item || container.item_css || '',
   }
+  if (config.fetch_config) {
+    extracted.sourceMode = config.fetch_config.mode || 'html'
+    extracted.sourceUrl = config.fetch_config.url || ''
+    extracted.itemsPath = config.fetch_config.items_path || ''
+    extracted.filterPath = config.fetch_config.filter_path || ''
+    extracted.filterEquals = config.fetch_config.filter_equals ?? ''
+    extracted.sourceHeaders = config.fetch_config.headers || {}
+  } else {
+    extracted.sourceMode = 'html'
+    extracted.sourceUrl = ''
+    extracted.itemsPath = ''
+    extracted.filterPath = ''
+    extracted.filterEquals = ''
+    extracted.sourceHeaders = {}
+  }
   if (fields.length > 0) extracted.fields = fields
   emit('update:modelValue', extracted)
   scanned.value = false
@@ -205,6 +266,25 @@ function applyCandidate(container) {
 
 function update(key, value) {
   emit('update:modelValue', { ...props.modelValue, [key]: value })
+}
+
+function updateSourceMode(mode) {
+  const next = { ...props.modelValue, sourceMode: mode }
+  if (mode === 'html') {
+    next.sourceUrl = ''
+    next.itemsPath = ''
+    next.filterPath = ''
+    next.filterEquals = ''
+    next.sourceHeaders = {}
+  }
+  emit('update:modelValue', next)
+}
+
+function updateSourceHeader(name, value) {
+  const headers = { ...(props.modelValue.sourceHeaders || {}) }
+  if (value.trim()) headers[name] = value
+  else delete headers[name]
+  emit('update:modelValue', { ...props.modelValue, sourceHeaders: headers })
 }
 
 function updateField(index, key, value) {
@@ -288,6 +368,10 @@ function removeField(index) {
 .advanced-toggle svg.rotated { transform: rotate(90deg); }
 
 .manual-section { margin-top: 0.75rem; }
+.source-grid { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+.source-grid .form-group { min-width: 0; }
+.header-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.header-grid .form-group { min-width: 0; }
 
 .fields-section { margin-top: 0.5rem; }
 .fields-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
@@ -305,5 +389,6 @@ function removeField(index) {
 @media (max-width: 768px) {
   .scan-row { flex-direction: column; align-items: stretch; }
   .field-grid { grid-template-columns: 1fr 1fr; }
+  .source-grid, .header-grid { grid-template-columns: 1fr; }
 }
 </style>

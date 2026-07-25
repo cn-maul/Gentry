@@ -154,35 +154,30 @@
       <div class="settings-section" v-if="monitor?.strategy_type === 'field_transition'">
         <div class="section-header">
           <h2>当前快照</h2>
-          <button class="btn btn-sm btn-ghost" @click="snapshotsExpanded = !snapshotsExpanded">
-            {{ snapshotsExpanded ? '收起' : '展开' }}
-          </button>
         </div>
-        <template v-if="snapshotsExpanded">
-          <div class="loading" v-if="snapshotsLoading"><div class="spinner" /></div>
-          <div class="snapshots-table" v-else-if="snapshots.length > 0">
-            <div class="snapshot-row snapshot-header">
-              <span class="snap-col snap-key">商品标识</span>
-              <span class="snap-col snap-price">当前价格</span>
-              <span class="snap-col snap-currency">币种</span>
-              <span class="snap-col snap-valid">状态</span>
-              <span class="snap-col snap-time">最后更新</span>
-            </div>
-            <div class="snapshot-row" v-for="snap in snapshots" :key="snap.id || snap.item_key">
-              <span class="snap-col snap-key" :title="snap.item_key">{{ snap.item_key }}</span>
-              <span class="snap-col snap-price">{{ snap.price_display || '—' }}</span>
-              <span class="snap-col snap-currency">{{ snap.currency || '—' }}</span>
-              <span class="snap-col snap-valid">
-                <span class="valid-dot" :class="snap.price_valid ? 'valid-yes' : 'valid-no'" />
-                {{ snap.price_valid ? '有效' : '无效' }}
-              </span>
-              <span class="snap-col snap-time">{{ snap.last_seen_at ? formatTime(snap.last_seen_at) : '—' }}</span>
-            </div>
+        <div class="loading" v-if="snapshotsLoading"><div class="spinner" /></div>
+        <div class="snapshots-table" v-else-if="snapshots.length > 0">
+          <div class="snapshot-row snapshot-header">
+            <span class="snap-col snap-key">商品标识</span>
+            <span class="snap-col snap-price">当前价格</span>
+            <span class="snap-col snap-currency">币种</span>
+            <span class="snap-col snap-valid">状态</span>
+            <span class="snap-col snap-time">最后更新</span>
           </div>
-          <div class="empty" v-else-if="!snapshotsLoading">
-            <p>暂无快照数据</p>
+          <div class="snapshot-row" v-for="snap in snapshots" :key="snap.id || snap.item_key">
+            <span class="snap-col snap-key" :title="snap.item_key">{{ snap.item_key }}</span>
+            <span class="snap-col snap-price">{{ snap.price_display || '—' }}</span>
+            <span class="snap-col snap-currency">{{ snap.currency || '—' }}</span>
+            <span class="snap-col snap-valid">
+              <span class="valid-dot" :class="snap.price_valid ? 'valid-yes' : 'valid-no'" />
+              {{ snap.price_valid ? '有效' : '无效' }}
+            </span>
+            <span class="snap-col snap-time">{{ snap.last_seen_at ? formatTime(snap.last_seen_at) : '—' }}</span>
           </div>
-        </template>
+        </div>
+        <div class="empty" v-else-if="!snapshotsLoading">
+          <p>暂无快照数据</p>
+        </div>
       </div>
 
       <!-- 价格监控事件历史 -->
@@ -269,7 +264,6 @@ const totalEventPages = computed(() => Math.max(1, Math.ceil(eventsTotal.value /
 // 快照
 const snapshots = ref([])
 const snapshotsLoading = ref(false)
-const snapshotsExpanded = ref(false)
 
 onMounted(loadData)
 

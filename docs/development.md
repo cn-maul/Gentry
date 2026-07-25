@@ -56,6 +56,7 @@ pnpm run build
 
 ```text
 网页抓取
+  → URL 范围匹配与扫描规则候选
   → CSS 字段提取
   → 类型规范化
   → 健康检查
@@ -93,6 +94,13 @@ main.go     应用入口与服务生命周期
 - `MonitorSnapshot`：每个稳定条目的当前比较基线；
 - `MonitorEvent`：检测到的变化事件；
 - `NotificationDelivery`：每个事件对应的异步通知任务；
+- `ScanRuleTemplate`、`ScanRuleField`：预扫描规则、适用范围和字段配置；
 - `UpdateRecord`：旧版新增监控兼容记录。
+
+## 扫描规则范围
+
+数据库规则支持 `exact`、`route` 和 `global` 三种范围。范围字段由服务端根据来源 URL 规范化生成，前端不直接提交 `match_host`、`match_path` 或 `match_query`。`ScopeType` 为空的历史记录回退到 `URLContains` 子串匹配。
+
+修改范围匹配时至少应覆盖以下测试：主机隔离、路径段边界、查询参数顺序、查询参数值差异、根路由保护、通用结构规则和旧版规则兼容。
 
 详细的引擎设计和历史审查记录位于[设计档案](design/)。

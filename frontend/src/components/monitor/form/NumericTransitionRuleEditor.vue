@@ -2,63 +2,11 @@
   <div class="settings-section">
     <div class="section-header">
       <h2>价格监控规则</h2>
-      <p class="section-desc">配置商品场景、价格字段和触发条件</p>
+      <p class="section-desc">设置满足什么价格条件时产生通知</p>
     </div>
 
     <div class="subsection">
-      <h3 class="subsection-title">页面场景</h3>
-      <div class="filter-mode-row">
-        <label class="radio-label" :class="{ active: form.rule.pageMode === 'single' }">
-          <input type="radio" :checked="form.rule.pageMode === 'single'" @change="updatePageMode('single')" />
-          单商品详情页
-        </label>
-        <label class="radio-label" :class="{ active: form.rule.pageMode === 'list' }">
-          <input type="radio" :checked="form.rule.pageMode === 'list'" @change="updatePageMode('list')" />
-          商品列表页
-        </label>
-      </div>
-      <p class="subsection-desc" style="margin-top: 0.5rem;">
-        单商品页可使用页面 URL 作为身份；商品列表必须配置列表项选择器和唯一身份字段。
-      </p>
-    </div>
-
-    <div class="subsection">
-      <h3 class="subsection-title">商品身份</h3>
-      <p class="subsection-desc">用于关联两次检查中的同一件商品。该字段必须稳定且唯一，不能使用列表位置。</p>
-      <IdentityFieldEditor
-        :modelValue="form.rule.identity"
-        @update:modelValue="updateIdentity"
-        :fields="form.extraction.fields.filter(field => field.name !== form.rule.target.field)"
-        :allowSourceUrl="form.rule.pageMode !== 'list'"
-      />
-    </div>
-
-    <div class="subsection">
-      <h3 class="subsection-title">被监控字段</h3>
-      <div class="form-row">
-        <div class="form-group">
-          <label>字段名称</label>
-          <select :value="form.rule.target.field" @change="updateTargetField($event.target.value)" class="form-input">
-            <option value="">选择监控字段</option>
-            <option v-for="f in form.extraction.fields" :key="f.name" :value="f.name">{{ f.name }}</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>数据类型</label>
-          <select value="money" class="form-input" disabled>
-            <option value="money">金额</option>
-          </select>
-          <p class="type-hint">当前版本支持金额降价和到价提醒</p>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>CSS 选择器</label>
-        <p class="hint">通常与提取配置中的字段选择器相同。如果在提取配置中已定义了该字段的选择器，此处无需重复填写。</p>
-      </div>
-    </div>
-
-    <div class="subsection">
-      <h3 class="subsection-title">变化规则</h3>
+      <h3 class="subsection-title">触发条件</h3>
       <div class="filter-mode-row rule-mode-row">
         <label class="radio-label" :class="{ active: form.rule.transition.operator === 'decreased' }">
           <input type="radio" :checked="form.rule.transition.operator === 'decreased'" @change="updateOperator('decreased')" />
@@ -102,44 +50,12 @@
 </template>
 
 <script setup>
-import IdentityFieldEditor from './IdentityFieldEditor.vue'
 import ThresholdEditor from './ThresholdEditor.vue'
 
 const props = defineProps({
   form: { type: Object, required: true },
 })
 const emit = defineEmits(['update:form'])
-
-function updatePageMode(pageMode) {
-  const identity = pageMode === 'single'
-    ? { mode: 'source_url', field: '' }
-    : { mode: 'field', field: props.form.rule.identity.field || '' }
-  emit('update:form', {
-    ...props.form,
-    rule: { ...props.form.rule, pageMode, identity },
-  })
-}
-
-function updateIdentity(val) {
-  emit('update:form', {
-    ...props.form,
-    rule: { ...props.form.rule, identity: val },
-  })
-}
-
-function updateTarget(key, value) {
-  emit('update:form', {
-    ...props.form,
-    rule: {
-      ...props.form.rule,
-      target: { ...props.form.rule.target, [key]: value },
-    },
-  })
-}
-
-function updateTargetField(fieldName) {
-  updateTarget('field', fieldName)
-}
 
 function updateTransition(val) {
   emit('update:form', {

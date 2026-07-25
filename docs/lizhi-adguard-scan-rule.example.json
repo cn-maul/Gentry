@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "荔枝商城商品 SKU",
+      "source_url": "https://lizhi.shop/products/adguard",
+      "scope_type": "section",
+      "container": "data",
+      "item": "*",
+      "priority": 90,
+      "enabled": true,
+      "description": "从商品页读取 goods_id，再从公开 SKU 接口提取全部在售规格和价格",
+      "fetch_config": {
+        "mode": "api_json",
+        "url": "https://lizhi.shop/site/goods_skus?goods_id={{goods_id}}",
+        "items_path": "data",
+        "filter_path": "is_selling",
+        "filter_equals": "true",
+        "headers": {
+          "Accept": "application/json, text/javascript, */*; q=0.01",
+          "Referer": "{{page_url}}",
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        "variables": {
+          "goods_id": {
+            "source": "html",
+            "selector": "#goods_id",
+            "attr": "value"
+          }
+        }
+      },
+      "fields": [
+        {
+          "name": "title",
+          "selector": "spec_array.*.value",
+          "type": "text"
+        },
+        {
+          "name": "sku",
+          "selector": "products_no",
+          "type": "text"
+        },
+        {
+          "name": "price",
+          "selector": "sell_price",
+          "type": "text"
+        },
+        {
+          "name": "original_price",
+          "selector": "original_price",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}

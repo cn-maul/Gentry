@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/andybalholm/cascadia"
 	"github.com/cn-maul/Gentry/database"
 	"github.com/cn-maul/Gentry/fetcher"
 	"github.com/cn-maul/Gentry/monitor"
@@ -38,6 +39,7 @@ type addMonitorRequest struct {
 	StrategyType     string            `json:"strategy_type"`
 	StrategyConfig   json.RawMessage   `json:"strategy_config"`
 	FieldDataTypes   map[string]string `json:"field_data_types"`
+	FetchConfig      json.RawMessage   `json:"fetch_config"`
 }
 
 type fieldRequest struct {
@@ -64,6 +66,7 @@ type monitorConfigResponse struct {
 	StrategyType     string            `json:"strategy_type,omitempty"`
 	StrategyConfig   json.RawMessage   `json:"strategy_config,omitempty"`
 	FieldDataTypes   map[string]string `json:"field_data_types,omitempty"`
+	FetchConfig      json.RawMessage   `json:"fetch_config,omitempty"`
 	BaselineStatus   string            `json:"baseline_status,omitempty"`
 }
 
@@ -91,6 +94,10 @@ func monitorConfigFromSite(site *database.Site) monitorConfigResponse {
 	if site.FieldDataTypes != "" {
 		json.Unmarshal([]byte(site.FieldDataTypes), &fieldDataTypes)
 	}
+	var fetchConfig json.RawMessage
+	if site.FetchConfig != "" {
+		fetchConfig = json.RawMessage(site.FetchConfig)
+	}
 	return monitorConfigResponse{
 		ID:               site.ID,
 		Name:             site.Name,
@@ -107,6 +114,7 @@ func monitorConfigFromSite(site *database.Site) monitorConfigResponse {
 		StrategyType:     site.StrategyType,
 		StrategyConfig:   strategyConfig,
 		FieldDataTypes:   fieldDataTypes,
+		FetchConfig:      fetchConfig,
 		BaselineStatus:   site.BaselineStatus,
 	}
 }
@@ -185,6 +193,10 @@ func dbSiteFromRequest(req *addMonitorRequest) (*database.Site, error) {
 		data, _ := json.Marshal(req.FieldDataTypes)
 		fieldDataTypesStr = string(data)
 	}
+	var fetchConfigStr string
+	if len(req.FetchConfig) > 0 && string(req.FetchConfig) != "null" {
+		fetchConfigStr = string(req.FetchConfig)
+	}
 	site := &database.Site{
 		Name:           req.Name,
 		URL:            req.URL,
@@ -198,6 +210,7 @@ func dbSiteFromRequest(req *addMonitorRequest) (*database.Site, error) {
 		StrategyType:   strategyType,
 		StrategyConfig: strategyConfigStr,
 		FieldDataTypes: fieldDataTypesStr,
+		FetchConfig:    fetchConfigStr,
 		BaselineStatus: "pending",
 		ConfigVersion:  1,
 	}
@@ -206,6 +219,18 @@ func dbSiteFromRequest(req *addMonitorRequest) (*database.Site, error) {
 	}
 	site.Fields = siteFieldsFromRequest(req.Fields)
 	return site, nil
+}
+
+func validateMonitorSourceURL(site *database.Site) error {
+	config, err := monitor.ParseFetchConfig(site.FetchConfig, site.URL)
+	if err != nil {
+		return err
+	}
+	validationURL, err := monitor.FetchURLValidationTarget(config.URL)
+	if err != nil {
+		return err
+	}
+	return validateOutboundURL(validationURL)
 }
 
 func siteFieldsFromRequest(fields []fieldRequest) []database.SiteField {
@@ -259,6 +284,10 @@ func (s *WebServer) addMonitor(c *gin.Context) {
 	}
 	if err := monitor.NormalizeAndValidateSiteDefinition(site); err != nil {
 		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "invalid monitor config: "+err.Error()))
+		return
+	}
+	if err := validateMonitorSourceURL(site); err != nil {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "invalid monitor source: "+err.Error()))
 		return
 	}
 
@@ -383,7 +412,7 @@ func (s *WebServer) updateMonitor(c *gin.Context) {
 	// 计算旧指纹（在修改 site 之前）
 	originalSite.Fields = append([]database.SiteField(nil), originalSite.Fields...)
 	oldFields := siteFieldsToRequest(originalSite.Fields)
-	oldFingerprint := computeDetectionFingerprint(originalSite.URL, originalSite.Container, originalSite.Item, oldFields, originalSite.StrategyType, originalSite.StrategyConfig, originalSite.FieldDataTypes)
+	oldFingerprint := computeDetectionFingerprintWithFetch(originalSite.URL, originalSite.Container, originalSite.Item, oldFields, originalSite.StrategyType, originalSite.StrategyConfig, originalSite.FieldDataTypes, originalSite.FetchConfig)
 
 	// 构建新配置
 	group := req.Group
@@ -403,6 +432,10 @@ func (s *WebServer) updateMonitor(c *gin.Context) {
 		data, _ := json.Marshal(req.FieldDataTypes)
 		fieldDataTypesStr = string(data)
 	}
+	var fetchConfigStr string
+	if len(req.FetchConfig) > 0 && string(req.FetchConfig) != "null" {
+		fetchConfigStr = string(req.FetchConfig)
+	}
 
 	// 构建并校验候选定义
 	candidate := originalSite
@@ -418,6 +451,7 @@ func (s *WebServer) updateMonitor(c *gin.Context) {
 	candidate.StrategyType = strategyType
 	candidate.StrategyConfig = strategyConfigStr
 	candidate.FieldDataTypes = fieldDataTypesStr
+	candidate.FetchConfig = fetchConfigStr
 	candidate.Fields = siteFieldsFromRequest(req.Fields)
 	if err := applyNotifyAccountIDs(&candidate, req.NotifyAccountIDs); err != nil {
 		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "invalid notify_account_ids: "+err.Error()))
@@ -427,8 +461,12 @@ func (s *WebServer) updateMonitor(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "invalid monitor config: "+err.Error()))
 		return
 	}
+	if err := validateMonitorSourceURL(&candidate); err != nil {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "invalid monitor source: "+err.Error()))
+		return
+	}
 
-	newFingerprint := computeDetectionFingerprint(candidate.URL, candidate.Container, candidate.Item, siteFieldsToRequest(candidate.Fields), candidate.StrategyType, candidate.StrategyConfig, candidate.FieldDataTypes)
+	newFingerprint := computeDetectionFingerprintWithFetch(candidate.URL, candidate.Container, candidate.Item, siteFieldsToRequest(candidate.Fields), candidate.StrategyType, candidate.StrategyConfig, candidate.FieldDataTypes, candidate.FetchConfig)
 	needsBaseline := oldFingerprint != newFingerprint
 	if needsBaseline {
 		candidate.ConfigVersion++
@@ -532,7 +570,7 @@ func (s *WebServer) getUpdates(c *gin.Context) {
 
 	var records []database.UpdateRecord
 	if err := database.GetDB().Where("site_id = ?", site.ID).
-		Order("created_at desc").
+		Order("created_at desc, id asc").
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		Find(&records).Error; err != nil {
@@ -738,13 +776,25 @@ type scanRuleFieldRequest struct {
 
 type scanRuleRequest struct {
 	Name        string                 `json:"name" binding:"required"`
-	URLContains string                 `json:"url_contains" binding:"required"`
+	URLContains string                 `json:"url_contains" binding:"required_without=ScopeType"`
+	SourceURL   string                 `json:"source_url"`
+	ScopeType   string                 `json:"scope_type"`
 	Container   string                 `json:"container" binding:"required"`
 	Item        string                 `json:"item" binding:"required"`
 	Priority    int                    `json:"priority"`
 	Enabled     *bool                  `json:"enabled"`
 	Description string                 `json:"description"`
+	FetchConfig json.RawMessage        `json:"fetch_config"`
 	Fields      []scanRuleFieldRequest `json:"fields"`
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 type scanRuleResponse struct {
@@ -753,11 +803,17 @@ type scanRuleResponse struct {
 	UpdatedAt   time.Time              `json:"updated_at"`
 	Name        string                 `json:"name"`
 	URLContains string                 `json:"url_contains"`
+	SourceURL   string                 `json:"source_url"`
+	ScopeType   string                 `json:"scope_type"`
+	MatchHost   string                 `json:"match_host"`
+	MatchPath   string                 `json:"match_path"`
+	MatchQuery  string                 `json:"match_query"`
 	Container   string                 `json:"container"`
 	Item        string                 `json:"item"`
 	Priority    int                    `json:"priority"`
 	Enabled     bool                   `json:"enabled"`
 	Description string                 `json:"description"`
+	FetchConfig json.RawMessage        `json:"fetch_config,omitempty"`
 	Fields      []scanRuleFieldRequest `json:"fields"`
 }
 
@@ -772,17 +828,27 @@ func scanRuleFromModel(rule database.ScanRuleTemplate) scanRuleResponse {
 			Transform: f.Transform,
 		})
 	}
+	var fetchConfig json.RawMessage
+	if rule.FetchConfig != "" {
+		fetchConfig = json.RawMessage(rule.FetchConfig)
+	}
 	return scanRuleResponse{
 		ID:          rule.ID,
 		CreatedAt:   rule.CreatedAt,
 		UpdatedAt:   rule.UpdatedAt,
 		Name:        rule.Name,
 		URLContains: rule.URLContains,
+		SourceURL:   rule.SourceURL,
+		ScopeType:   rule.ScopeType,
+		MatchHost:   rule.MatchHost,
+		MatchPath:   rule.MatchPath,
+		MatchQuery:  rule.MatchQuery,
 		Container:   rule.Container,
 		Item:        rule.Item,
 		Priority:    rule.Priority,
 		Enabled:     rule.Enabled,
 		Description: rule.Description,
+		FetchConfig: fetchConfig,
 		Fields:      fields,
 	}
 }
@@ -830,9 +896,199 @@ func dbScanRuleFromRequest(req *scanRuleRequest) *database.ScanRuleTemplate {
 		Priority:    priority,
 		Enabled:     enabled,
 		Description: req.Description,
+		FetchConfig: string(req.FetchConfig),
 		Fields:      scanRuleFieldsFromRequest(req.Fields),
 	}
 	return rule
+}
+
+type quickScanRuleRequest struct {
+	Name      string                    `json:"name" binding:"required"`
+	URL       string                    `json:"url" binding:"required"`
+	Keywords  string                    `json:"keywords"`
+	ScopeType string                    `json:"scope_type"`
+	Config    monitor.ScanMonitorConfig `json:"config" binding:"required"`
+}
+
+type scanRuleImportRequest struct {
+	Name        string                 `json:"name"`
+	URLContains string                 `json:"url_contains"`
+	SourceURL   string                 `json:"source_url"`
+	ScopeType   string                 `json:"scope_type"`
+	Container   string                 `json:"container"`
+	Item        string                 `json:"item"`
+	Priority    int                    `json:"priority"`
+	Enabled     *bool                  `json:"enabled"`
+	Description string                 `json:"description"`
+	FetchConfig json.RawMessage        `json:"fetch_config"`
+	Fields      []scanRuleFieldRequest `json:"fields"`
+}
+
+type scanRuleExportDocument struct {
+	Version    int                `json:"version"`
+	ExportedAt time.Time          `json:"exported_at"`
+	Rules      []scanRuleResponse `json:"rules"`
+}
+
+func validateScanRuleDefinition(container, item string, fields []scanRuleFieldRequest) error {
+	container = strings.TrimSpace(container)
+	item = strings.TrimSpace(item)
+	if container == "" || item == "" {
+		return fmt.Errorf("扫描结果缺少容器或列表项配置")
+	}
+	if _, err := cascadia.Compile(container); err != nil {
+		return fmt.Errorf("容器选择器无效: %w", err)
+	}
+	if _, err := cascadia.Compile(item); err != nil {
+		return fmt.Errorf("列表项选择器无效: %w", err)
+	}
+	hasTitle := false
+	for _, field := range fields {
+		if strings.TrimSpace(field.Name) == "" {
+			return fmt.Errorf("字段名称不能为空")
+		}
+		if field.Name == "title" {
+			hasTitle = true
+		}
+		if strings.TrimSpace(field.Selector) != "" {
+			if _, err := cascadia.Compile(field.Selector); err != nil {
+				return fmt.Errorf("字段 %q 的选择器无效: %w", field.Name, err)
+			}
+		}
+	}
+	if !hasTitle {
+		return fmt.Errorf("规则至少需要一个 title 字段")
+	}
+	return nil
+}
+
+func validateScanRuleConfig(container, item string, fields []scanRuleFieldRequest, fetchConfig *monitor.FetchConfig) error {
+	if fetchConfig == nil || fetchConfig.Mode == "" || fetchConfig.Mode == monitor.FetchModeHTML {
+		return validateScanRuleDefinition(container, item, fields)
+	}
+	if fetchConfig.Mode != monitor.FetchModeAPIJSON {
+		return fmt.Errorf("不支持的规则数据源模式: %s", fetchConfig.Mode)
+	}
+	if strings.TrimSpace(fetchConfig.URL) == "" || strings.TrimSpace(fetchConfig.ItemsPath) == "" {
+		return fmt.Errorf("JSON API 规则缺少接口 URL 或列表路径")
+	}
+	hasTitle := false
+	for _, field := range fields {
+		if strings.TrimSpace(field.Name) == "" || strings.TrimSpace(field.Selector) == "" {
+			return fmt.Errorf("JSON API 规则字段名称和路径不能为空")
+		}
+		if field.Name == "title" {
+			hasTitle = true
+		}
+	}
+	if !hasTitle {
+		return fmt.Errorf("规则至少需要一个 title 字段")
+	}
+	return nil
+}
+
+func validateScanRuleSource(rule *database.ScanRuleTemplate, fallbackURL string) error {
+	if strings.TrimSpace(rule.FetchConfig) == "" {
+		return nil
+	}
+	config, err := monitor.ParseFetchConfig(rule.FetchConfig, fallbackURL)
+	if err != nil {
+		return err
+	}
+	validationURL, err := monitor.FetchURLValidationTarget(config.URL)
+	if err != nil {
+		return err
+	}
+	return validateOutboundURL(validationURL)
+}
+
+func scanRuleFieldsFromConfig(fields []monitor.ScanFieldConfig) []scanRuleFieldRequest {
+	result := make([]scanRuleFieldRequest, 0, len(fields))
+	for _, field := range fields {
+		result = append(result, scanRuleFieldRequest{
+			Name: field.Name, Selector: field.Selector, Type: field.Type,
+			Attr: field.Attr, Transform: field.Transform,
+		})
+	}
+	return result
+}
+
+func dbQuickScanRuleFromRequest(req *quickScanRuleRequest) (*database.ScanRuleTemplate, error) {
+	fields := scanRuleFieldsFromConfig(req.Config.Fields)
+	if err := validateScanRuleConfig(req.Config.Container, req.Config.Item, fields, req.Config.Fetch); err != nil {
+		return nil, err
+	}
+	var fetchConfig string
+	if req.Config.Fetch != nil {
+		data, err := json.Marshal(req.Config.Fetch)
+		if err != nil {
+			return nil, err
+		}
+		fetchConfig = string(data)
+	}
+	rule := &database.ScanRuleTemplate{
+		Name:        strings.TrimSpace(req.Name),
+		Container:   strings.TrimSpace(req.Config.Container),
+		Item:        strings.TrimSpace(req.Config.Item),
+		Priority:    50,
+		Enabled:     true,
+		Description: "通过快速扫描生成",
+		FetchConfig: fetchConfig,
+		Fields:      scanRuleFieldsFromRequest(fields),
+	}
+	if rule.Name == "" {
+		return nil, fmt.Errorf("规则名称不能为空")
+	}
+	if err := monitor.ApplyScanRuleScope(rule, req.URL, req.ScopeType); err != nil {
+		return nil, err
+	}
+	return rule, nil
+}
+
+func dbImportedScanRule(req scanRuleImportRequest) (*database.ScanRuleTemplate, error) {
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+	priority := req.Priority
+	if priority <= 0 {
+		priority = 50
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		return nil, fmt.Errorf("规则名称不能为空")
+	}
+	var parsedFetch *monitor.FetchConfig
+	if len(req.FetchConfig) > 0 && string(req.FetchConfig) != "null" {
+		var config monitor.FetchConfig
+		if err := json.Unmarshal(req.FetchConfig, &config); err != nil {
+			return nil, fmt.Errorf("fetch_config 无效: %w", err)
+		}
+		parsedFetch = &config
+	}
+	if err := validateScanRuleConfig(req.Container, req.Item, req.Fields, parsedFetch); err != nil {
+		return nil, err
+	}
+	rule := &database.ScanRuleTemplate{
+		Name:        strings.TrimSpace(req.Name),
+		URLContains: strings.TrimSpace(req.URLContains),
+		Container:   strings.TrimSpace(req.Container),
+		Item:        strings.TrimSpace(req.Item),
+		Priority:    priority,
+		Enabled:     enabled,
+		Description: req.Description,
+		FetchConfig: string(req.FetchConfig),
+		Fields:      scanRuleFieldsFromRequest(req.Fields),
+	}
+	if req.ScopeType == "" {
+		if rule.URLContains == "" {
+			return nil, fmt.Errorf("旧版规则缺少 url_contains")
+		}
+		return rule, nil
+	}
+	if err := monitor.ApplyScanRuleScope(rule, req.SourceURL, req.ScopeType); err != nil {
+		return nil, err
+	}
+	return rule, nil
 }
 
 func (s *WebServer) listScanRules(c *gin.Context) {
@@ -851,6 +1107,10 @@ func (s *WebServer) createScanRule(c *gin.Context) {
 		return
 	}
 	rule := dbScanRuleFromRequest(&req)
+	if err := validateScanRuleSource(rule, ""); err != nil {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则数据源无效: "+err.Error()))
+		return
+	}
 	if err := database.CreateScanRuleTemplate(rule); err != nil {
 		c.JSON(http.StatusConflict, NewErrorResponse(409, "创建扫描规则失败: "+err.Error()))
 		return
@@ -860,6 +1120,139 @@ func (s *WebServer) createScanRule(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, NewSuccessResponse(scanRuleFromModel(*rule)))
+}
+
+func (s *WebServer) quickCreateScanRule(c *gin.Context) {
+	var req quickScanRuleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "参数错误: "+err.Error()))
+		return
+	}
+	if err := validateOutboundURL(req.URL); err != nil {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "URL 无效: "+err.Error()))
+		return
+	}
+	rule, err := dbQuickScanRuleFromRequest(&req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则无效: "+err.Error()))
+		return
+	}
+	if rule.FetchConfig != "" {
+		config, parseErr := monitor.ParseFetchConfig(rule.FetchConfig, req.URL)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则数据源无效: "+parseErr.Error()))
+			return
+		}
+		validationURL, validationErr := monitor.FetchURLValidationTarget(config.URL)
+		if validationErr != nil {
+			c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则数据源 URL 无效: "+validationErr.Error()))
+			return
+		}
+		if err := validateOutboundURL(validationURL); err != nil {
+			c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则数据源 URL 无效: "+err.Error()))
+			return
+		}
+	}
+	if err := database.CreateScanRuleTemplate(rule); err != nil {
+		c.JSON(http.StatusConflict, NewErrorResponse(409, "创建扫描规则失败: "+err.Error()))
+		return
+	}
+	if err := database.GetDB().Preload("Fields").First(rule, rule.ID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, NewErrorResponse(500, "读取新建扫描规则失败: "+err.Error()))
+		return
+	}
+	c.JSON(http.StatusCreated, NewSuccessResponse(scanRuleFromModel(*rule)))
+}
+
+func (s *WebServer) exportScanRules(c *gin.Context) {
+	var rules []database.ScanRuleTemplate
+	if err := database.GetDB().Preload("Fields").Order("priority desc, created_at asc").Find(&rules).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, NewErrorResponse(500, "导出扫描规则失败: "+err.Error()))
+		return
+	}
+	c.Header("Content-Disposition", `attachment; filename="gentry-scan-rules.json"`)
+	c.JSON(http.StatusOK, NewSuccessResponse(scanRuleExportDocument{
+		Version: 1, ExportedAt: time.Now(), Rules: scanRulesFromModels(rules),
+	}))
+}
+
+func (s *WebServer) importScanRules(c *gin.Context) {
+	var document struct {
+		Version int                     `json:"version"`
+		Rules   []scanRuleImportRequest `json:"rules"`
+	}
+	if err := c.ShouldBindJSON(&document); err != nil {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则文件无效: "+err.Error()))
+		return
+	}
+	if document.Version != 1 {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, fmt.Sprintf("不支持的规则文件版本: %d", document.Version)))
+		return
+	}
+	if len(document.Rules) == 0 || len(document.Rules) > 500 {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则文件必须包含 1 到 500 条规则"))
+		return
+	}
+
+	prepared := make([]*database.ScanRuleTemplate, 0, len(document.Rules))
+	seen := make(map[string]struct{}, len(document.Rules))
+	for index, imported := range document.Rules {
+		rule, err := dbImportedScanRule(imported)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, NewErrorResponse(400, fmt.Sprintf("第 %d 条规则无效: %v", index+1, err)))
+			return
+		}
+		if err := validateScanRuleSource(rule, rule.SourceURL); err != nil {
+			c.JSON(http.StatusBadRequest, NewErrorResponse(400, fmt.Sprintf("第 %d 条规则数据源无效: %v", index+1, err)))
+			return
+		}
+		if _, exists := seen[rule.Name]; exists {
+			c.JSON(http.StatusBadRequest, NewErrorResponse(400, fmt.Sprintf("规则文件中名称重复: %s", rule.Name)))
+			return
+		}
+		seen[rule.Name] = struct{}{}
+		prepared = append(prepared, rule)
+	}
+
+	var existing []string
+	if err := database.GetDB().Model(&database.ScanRuleTemplate{}).Pluck("name", &existing).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, NewErrorResponse(500, "读取现有规则失败: "+err.Error()))
+		return
+	}
+	existingNames := make(map[string]struct{}, len(existing))
+	for _, name := range existing {
+		existingNames[name] = struct{}{}
+	}
+	toCreate := make([]*database.ScanRuleTemplate, 0, len(prepared))
+	skipped := 0
+	for _, rule := range prepared {
+		if _, exists := existingNames[rule.Name]; exists {
+			skipped++
+			continue
+		}
+		toCreate = append(toCreate, rule)
+	}
+
+	if err := database.GetDB().Transaction(func(tx *gorm.DB) error {
+		for _, rule := range toCreate {
+			if err := tx.Omit("Fields").Create(rule).Error; err != nil {
+				return err
+			}
+			for index := range rule.Fields {
+				rule.Fields[index].RuleID = rule.ID
+			}
+			if len(rule.Fields) > 0 {
+				if err := tx.Create(&rule.Fields).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, NewErrorResponse(500, "导入扫描规则失败: "+err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, NewSuccessResponse(map[string]int{"imported": len(toCreate), "skipped": skipped}))
 }
 
 func (s *WebServer) updateScanRule(c *gin.Context) {
@@ -875,6 +1268,23 @@ func (s *WebServer) updateScanRule(c *gin.Context) {
 		return
 	}
 	updated := dbScanRuleFromRequest(&req)
+	var parsedFetch *monitor.FetchConfig
+	if updated.FetchConfig != "" {
+		config, parseErr := monitor.ParseFetchConfig(updated.FetchConfig, firstNonEmptyString(req.SourceURL, rule.SourceURL))
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则数据源无效: "+parseErr.Error()))
+			return
+		}
+		parsedFetch = &config
+	}
+	if err := validateScanRuleConfig(updated.Container, updated.Item, req.Fields, parsedFetch); err != nil {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则无效: "+err.Error()))
+		return
+	}
+	if err := validateScanRuleSource(updated, rule.SourceURL); err != nil {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则数据源无效: "+err.Error()))
+		return
+	}
 	rule.Name = updated.Name
 	rule.URLContains = updated.URLContains
 	rule.Container = updated.Container
@@ -882,6 +1292,14 @@ func (s *WebServer) updateScanRule(c *gin.Context) {
 	rule.Priority = updated.Priority
 	rule.Enabled = updated.Enabled
 	rule.Description = updated.Description
+	rule.FetchConfig = updated.FetchConfig
+	if req.ScopeType != "" {
+		sourceURL := firstNonEmptyString(req.SourceURL, rule.SourceURL)
+		if err := monitor.ApplyScanRuleScope(&rule, sourceURL, req.ScopeType); err != nil {
+			c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则适用范围无效: "+err.Error()))
+			return
+		}
+	}
 	if err := database.UpdateScanRuleTemplate(&rule, updated.Fields); err != nil {
 		c.JSON(http.StatusInternalServerError, NewErrorResponse(500, "更新扫描规则失败: "+err.Error()))
 		return
@@ -1150,8 +1568,9 @@ func (s *WebServer) updateNotificationSettings(c *gin.Context) {
 
 func (s *WebServer) previewScan(c *gin.Context) {
 	var req struct {
-		URL      string `json:"url" binding:"required"`
-		Keywords string `json:"keywords"`
+		URL          string `json:"url" binding:"required"`
+		Keywords     string `json:"keywords"`
+		StrategyType string `json:"strategy_type"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "参数错误: "+err.Error()))
@@ -1171,8 +1590,9 @@ func (s *WebServer) previewScan(c *gin.Context) {
 	}
 
 	result, err := monitor.SmartScan(&monitor.ScanSettings{
-		URL:      req.URL,
-		Keywords: keywords,
+		URL:          req.URL,
+		Keywords:     keywords,
+		StrategyType: req.StrategyType,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, NewErrorResponse(500, "扫描失败: "+err.Error()))
@@ -1354,9 +1774,60 @@ func (s *WebServer) testScanRule(c *gin.Context) {
 	}
 
 	// 验证 URL 匹配
-	if !strings.Contains(strings.ToLower(req.URL), strings.ToLower(rule.URLContains)) {
-		c.JSON(http.StatusBadRequest, NewErrorResponse(400, fmt.Sprintf("URL 不包含匹配关键词: 期望包含 %q", rule.URLContains)))
+	if !monitor.ScanRuleMatchesURL(rule, req.URL) {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "测试 URL 不在该规则的适用范围内"))
 		return
+	}
+	if rule.FetchConfig != "" {
+		fetchConfig, parseErr := monitor.ParseFetchConfig(rule.FetchConfig, req.URL)
+		if parseErr != nil {
+			c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则数据源无效: "+parseErr.Error()))
+			return
+		}
+		if fetchConfig.Mode == monitor.FetchModeAPIJSON {
+			site := &database.Site{
+				URL: req.URL, Container: rule.Container, Item: rule.Item,
+				FetchConfig: rule.FetchConfig,
+			}
+			for _, field := range rule.Fields {
+				site.Fields = append(site.Fields, database.SiteField{
+					Name: field.Name, Selector: field.Selector, Type: field.Type,
+					Attr: field.Attr, Transform: field.Transform,
+				})
+			}
+			items, extractErr := monitor.ExtractConfiguredSource(c.Request.Context(), site)
+			if extractErr != nil {
+				c.JSON(http.StatusBadRequest, NewErrorResponse(400, "规则提取失败: "+extractErr.Error()))
+				return
+			}
+			sampleItems := items
+			if len(sampleItems) > 10 {
+				sampleItems = sampleItems[:10]
+			}
+			fields := make([]monitor.ScanFieldConfig, 0, len(rule.Fields))
+			for _, field := range rule.Fields {
+				fieldType := field.Type
+				if fieldType == "" {
+					fieldType = "text"
+				}
+				fields = append(fields, monitor.ScanFieldConfig{
+					Name: field.Name, Selector: field.Selector, Type: fieldType,
+					Attr: field.Attr, Transform: field.Transform,
+				})
+			}
+			c.JSON(http.StatusOK, NewSuccessResponse(&monitor.ScanResult{
+				URL: req.URL,
+				Containers: []monitor.ContainerInfo{{
+					ContainerTag: "JSON", ContainerCSS: rule.Container,
+					ItemTag: "OBJECT", ItemCSS: rule.Item, ItemCount: len(items),
+					Config:   monitor.ScanMonitorConfig{Container: rule.Container, Item: rule.Item, Fields: fields, Fetch: &fetchConfig},
+					Strategy: "rule_test", Confidence: 100,
+					Diagnostics: []string{"测试规则匹配成功", fmt.Sprintf("JSON API 提取到 %d 个条目", len(items))},
+					SampleItems: sampleItems,
+				}},
+			}))
+			return
+		}
 	}
 
 	// 使用规则模板的 selector 执行提取
@@ -1516,7 +1987,7 @@ func (s *WebServer) getMonitorEvents(c *gin.Context) {
 
 	var events []database.MonitorEvent
 	if err := database.GetDB().Where("site_id = ?", site.ID).
-		Order("occurred_at desc").
+		Order("occurred_at desc, id asc").
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		Find(&events).Error; err != nil {
@@ -1541,7 +2012,7 @@ func (s *WebServer) getMonitorSnapshots(c *gin.Context) {
 	}
 
 	var snapshots []database.MonitorSnapshot
-	if err := database.GetDB().Where("site_id = ? AND definition_version = ?", site.ID, site.ConfigVersion).Order("last_seen_at desc").Find(&snapshots).Error; err != nil {
+	if err := database.GetDB().Where("site_id = ? AND definition_version = ?", site.ID, site.ConfigVersion).Order("last_seen_at desc, id asc").Find(&snapshots).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, NewErrorResponse(500, "failed to load snapshots: "+err.Error()))
 		return
 	}
@@ -1626,6 +2097,10 @@ func (s *WebServer) validateMonitorConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "invalid monitor config: "+err.Error()))
 		return
 	}
+	if err := validateMonitorSourceURL(site); err != nil {
+		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "invalid monitor source: "+err.Error()))
+		return
+	}
 	engine, err := monitor.NewEngine(site)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, NewErrorResponse(400, "invalid monitor config: "+err.Error()))
@@ -1661,6 +2136,10 @@ func (s *WebServer) validateMonitorConfig(c *gin.Context) {
 
 // computeDetectionFingerprint 计算检测语义指纹，用于判断配置变化是否需要重建基线
 func computeDetectionFingerprint(url, container, item string, fields []fieldRequest, strategyType, strategyConfig, fieldDataTypes string) string {
+	return computeDetectionFingerprintWithFetch(url, container, item, fields, strategyType, strategyConfig, fieldDataTypes, "")
+}
+
+func computeDetectionFingerprintWithFetch(url, container, item string, fields []fieldRequest, strategyType, strategyConfig, fieldDataTypes, fetchConfig string) string {
 	type canonicalField struct {
 		Name      string `json:"name"`
 		Selector  string `json:"selector"`
@@ -1702,11 +2181,13 @@ func computeDetectionFingerprint(url, container, item string, fields []fieldRequ
 		StrategyType   string           `json:"strategy_type"`
 		StrategyConfig string           `json:"strategy_config"`
 		FieldDataTypes string           `json:"field_data_types"`
+		FetchConfig    string           `json:"fetch_config"`
 		Fields         []canonicalField `json:"fields"`
 	}{
 		URL: strings.TrimSpace(url), Container: container, Item: item,
 		StrategyType: strategyType, StrategyConfig: canonicalStrategy,
 		FieldDataTypes: canonicalJSONString(fieldDataTypes), Fields: canonicalFields,
+		FetchConfig: canonicalJSONString(fetchConfig),
 	}
 	data, _ := json.Marshal(definition)
 	sum := sha256.Sum256(data)

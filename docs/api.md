@@ -68,10 +68,77 @@ Authorization: Bearer <token>
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | `GET` | `/api/settings/scan-rules` | 获取模板列表 |
+| `POST` | `/api/settings/scan-rules/quick` | 根据预扫描候选快速保存规则 |
+| `GET` | `/api/settings/scan-rules/export` | 导出版本化规则 JSON |
+| `POST` | `/api/settings/scan-rules/import` | 导入规则 JSON；同名规则跳过 |
 | `POST` | `/api/settings/scan-rules` | 创建模板 |
 | `PUT` | `/api/settings/scan-rules/:id` | 更新模板 |
 | `DELETE` | `/api/settings/scan-rules/:id` | 删除模板 |
 | `POST` | `/api/settings/scan-rules/:id/test` | 测试模板 |
+
+快速保存请求示例：
+
+```json
+{
+  "name": "招考录用列表",
+  "url": "https://example.com/notices/?a=dir&c=100",
+  "keywords": "招聘,公告",
+  "scope_type": "exact",
+  "config": {
+    "container": "ul.notice-list",
+    "item": "li",
+    "fields": [
+      { "name": "title", "selector": "a", "type": "text" },
+      { "name": "url", "selector": "a", "type": "attr", "attr": "href" }
+    ]
+  }
+}
+```
+
+`scope_type` 支持：
+
+- `exact`：主机、路径和规范化查询参数完全匹配；默认值。
+- `route`：主机相同且路径位于同一路由；源 URL 有查询参数时查询参数也必须一致。
+- `section`：主机相同，匹配源页面父目录下的页面。
+- `global`：不限制 URL，按页面结构匹配。
+
+JSON API 候选的 `config` 还会包含 `fetch_config`：
+
+```json
+{
+  "mode": "api_json",
+  "url": "https://shop.example/api/skus?id={{goods_id}}",
+  "items_path": "data",
+  "filter_path": "is_selling",
+  "filter_equals": "true",
+  "headers": {
+    "Accept": "application/json",
+    "Referer": "{{page_url}}",
+    "X-Requested-With": "XMLHttpRequest"
+  },
+  "variables": {
+    "goods_id": {
+      "source": "html",
+      "selector": "#goods_id",
+      "attr": "value"
+    }
+  }
+}
+```
+
+`headers` 仅允许 `Accept`、`Accept-Language`、`Referer` 和 `X-Requested-With`。`variables` 从当前页面提取动态值；`{{page_url}}` 是当前页面 URL。API URL 仍受出站地址安全校验约束，模板变量不能用于协议或主机。
+
+导出接口返回的数据部分格式为：
+
+```json
+{
+  "version": 1,
+  "exported_at": "2026-07-24T18:25:58+08:00",
+  "rules": []
+}
+```
+
+导入接口直接接收上述数据对象，单次允许 1 到 500 条规则。导入会校验规则名称、CSS 选择器、`title` 字段和适用范围，并返回 `imported` 与 `skipped` 数量。
 
 ## 到价提醒策略示例
 

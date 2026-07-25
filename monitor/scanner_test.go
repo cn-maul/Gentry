@@ -34,6 +34,134 @@ func TestExtractorExtractsGenericListItems(t *testing.T) {
 	}
 }
 
+func TestExtractorNarrowsLegacyBareListSelectorAwayFromNavigation(t *testing.T) {
+	html := `<body>
+		<div class="sideMenu"><ul class="submenu">
+			<li><a href="/zfxxgk/fdzdgknr/zfgb/">政府公报</a></li>
+			<li><a href="/zfxxgk/fdzdgknr/cfqz/">处罚强制</a></li>
+			<li><a href="/jczwgk/gkly/cszhzf/xzqzqzqd/">行政许可和对外管理服务</a></li>
+		</ul></div>
+		<div class="zfxxgk_zdgkc"><ul>
+			<li><a href="/2026/07-23/3653721.html">2026年安阳市殷都区委组织部所属事业单位公开选调工作人员公告</a><span>2026-07-23</span></li>
+			<li><a href="/2026/07-17/3652898.html">2026年事业单位公开招聘面试资格确认递补公告</a><span>2026-07-17</span></li>
+			<li><a href="/2026/07-01/3650588.html">2026年事业单位公开招聘面试资格确认公告</a><span>2026-07-01</span></li>
+		</ul></div>
+	</body>`
+	ex := NewExtractor(SiteSelectors{
+		Container: "ul",
+		Item:      "li",
+		Fields: []FieldConfig{
+			{Name: "title", Selector: "a", Type: "text"},
+			{Name: "url", Selector: "a", Type: "attr", Attr: "href"},
+		},
+	})
+	items, err := ex.Extract(html)
+	if err != nil {
+		t.Fatalf("Extract failed: %v", err)
+	}
+	if len(items) != 3 {
+		t.Fatalf("expected only 3 announcement items, got %d: %+v", len(items), items)
+	}
+	if items[0]["title"] != "2026年安阳市殷都区委组织部所属事业单位公开选调工作人员公告" {
+		t.Fatalf("unexpected first item: %+v", items[0])
+	}
+	for _, item := range items {
+		if item["title"] == "政府公报" || item["title"] == "处罚强制" || item["title"] == "行政许可和对外管理服务" {
+			t.Fatalf("navigation item must not be extracted: %+v", item)
+		}
+	}
+}
+
+func TestSmartScanBuildsScopedSelectorForUnclassifiedContentList(t *testing.T) {
+	html := `<body>
+		<div class="sideMenu"><ul class="submenu">
+			<li><a href="/zfgb/">政府公报</a></li><li><a href="/cfqz/">处罚强制</a></li><li><a href="/xzfw/">行政许可和对外管理服务</a></li>
+		</ul></div>
+		<div class="scroll_main1"><div class="zfxxgk_zdgkc"><ul>
+			<li><a href="/2026/07-23/3653721.html">2026年公开选调工作人员公告</a><span>2026-07-23</span></li>
+			<li><a href="/2026/07-17/3652898.html">2026年公开招聘递补公告</a><span>2026-07-17</span></li>
+			<li><a href="/2026/07-01/3650588.html">2026年公开招聘资格确认公告</a><span>2026-07-01</span></li>
+		</ul></div></div>
+	</body>`
+	res, err := smartScanHTML(html, []string{"公开选调"})
+	if err != nil {
+		t.Fatalf("smartScanHTML failed: %v", err)
+	}
+	if len(res.Containers) == 0 {
+		t.Fatal("expected announcement candidate")
+	}
+	candidate := res.Containers[0]
+	if candidate.Config.Container == "ul" {
+		t.Fatalf("scanner must scope a non-unique ul selector: %+v", candidate.Config)
+	}
+	items, err := NewExtractor(scanConfigToSelectors(candidate.Config)).Extract(html)
+	if err != nil {
+		t.Fatalf("extract candidate config: %v", err)
+	}
+	if len(items) != 3 {
+		t.Fatalf("expected 3 scoped announcement items, got %d: %+v", len(items), items)
+	}
+}
+
+func TestSmartScanPrefersDirectArticleAnchorsOverMetadataLists(t *testing.T) {
+	html := `<body><div class="common-box dir-list"><div class="box-content"><ul class="page-list">
+		<a class="list_item_pubinfo_a" href="/D49Y/10166257.jhtml"><span>2026年郑东新区事业单位公开招聘笔试拟加分人员公示</span></a>
+		<ul class="pubinfo-card"><li>330126167/2026-00059</li><li>郑东新区组织人事和社会保障局</li><li>事业单位公开招聘</li><li>2026-07-21</li></ul>
+		<ul class="pubinfo-card-list-m hidden m-shown"><li>2026-07-21</li><li>330126167/2026-00059</li></ul>
+		<a class="list_item_pubinfo_a" href="/D49Y/10135265.jhtml"><span>2026年郑东新区事业单位公开招聘笔试加分资格审核通知</span></a>
+		<ul class="pubinfo-card"><li>330126167/2026-00053</li><li>郑东新区组织人事和社会保障局</li><li>事业单位招聘</li><li>2026-07-02</li></ul>
+		<ul class="pubinfo-card-list-m hidden m-shown"><li>2026-07-02</li><li>330126167/2026-00053</li></ul>
+		<a class="list_item_pubinfo_a" href="/D1703X/9699707.jhtml"><span>2025年郑东新区事业单位公开招聘考试总成绩及体检公告</span></a>
+		<ul class="pubinfo-card"><li>330126167/2025-00081</li><li>郑东新区组织人事和社会保障局</li><li>事业单位招聘</li><li>2025-11-02</li></ul>
+		<ul class="pubinfo-card-list-m hidden m-shown"><li>2025-11-02</li><li>330126167/2025-00081</li></ul>
+	</ul></div></div></body>`
+	res, err := smartScanHTML(html, []string{"公开招聘"})
+	if err != nil {
+		t.Fatalf("smartScanHTML failed: %v", err)
+	}
+	if len(res.Containers) == 0 {
+		t.Fatal("expected public information list candidate")
+	}
+	candidate := res.Containers[0]
+	if candidate.Config.Item != "a.list_item_pubinfo_a" {
+		t.Fatalf("item selector = %q, want direct article anchors; candidates=%+v", candidate.Config.Item, res.Containers)
+	}
+	items, err := NewExtractor(scanConfigToSelectors(candidate.Config)).Extract(html)
+	if err != nil {
+		t.Fatalf("extract candidate config: %v", err)
+	}
+	if len(items) != 3 {
+		t.Fatalf("expected 3 articles, got %d: %+v", len(items), items)
+	}
+	if items[0]["title"] != "2026年郑东新区事业单位公开招聘笔试拟加分人员公示" || items[0]["url"] != "/D49Y/10166257.jhtml" {
+		t.Fatalf("unexpected first article: %+v", items[0])
+	}
+}
+
+func TestExtractorRecoversLegacyMetadataItemSelector(t *testing.T) {
+	html := `<body><ul class="page-list">
+		<a class="list_item_pubinfo_a" href="/D49Y/10166257.jhtml"><span>第一条公开招聘公告</span></a>
+		<ul class="pubinfo-card"><li>索引号 001</li><li>2026-07-21</li></ul>
+		<a class="list_item_pubinfo_a" href="/D49Y/10135265.jhtml"><span>第二条公开招聘公告</span></a>
+		<ul class="pubinfo-card"><li>索引号 002</li><li>2026-07-02</li></ul>
+	</ul></body>`
+	ex := NewExtractor(SiteSelectors{
+		Container: "ul.page-list",
+		Item:      "ul.pubinfo-card",
+		Fields:    []FieldConfig{{Name: "title", Type: "text"}},
+	})
+	items, err := ex.Extract(html)
+	if err != nil {
+		t.Fatalf("Extract failed: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 recovered articles, got %d: %+v", len(items), items)
+	}
+	if items[0]["title"] != "第一条公开招聘公告" || items[0]["url"] != "/D49Y/10166257.jhtml" {
+		t.Fatalf("unexpected recovered article: %+v", items[0])
+	}
+}
+
 func TestExtractorTitleFallsBackToItemText(t *testing.T) {
 	html := `<ul class="news-list"><li>纯文本公告标题</li></ul>`
 	ex := NewExtractor(SiteSelectors{
@@ -90,21 +218,16 @@ func TestSmartScanGenericULList(t *testing.T) {
 	}
 }
 
-func TestSmartScanThePaperRuleTakesEffect(t *testing.T) {
+func TestSmartScanDoesNotUseSiteSpecificBuiltInRules(t *testing.T) {
 	html := `<body><div><div class="time_line_item__rQXQP"><ul class="ant-timeline"><li class="ant-timeline-item">2026.070718:48深圳水官高速延长线停止收费，两个月前水官高速已停收</li><li class="ant-timeline-item">18:42智谱基石解禁日获近七成基石投资者表态长期持有</li></ul></div></div></body>`
 	res, err := smartScanHTMLWithSettings(html, &ScanSettings{URL: "https://www.thepaper.cn/expressNews", Keywords: []string{"深圳水官高速延长线停止收费", "智谱基石解禁日"}})
 	if err != nil {
 		t.Fatalf("smartScanHTMLWithSettings failed: %v", err)
 	}
-	if len(res.Containers) == 0 {
-		t.Fatalf("expected rule-backed candidate")
-	}
-	candidate := res.Containers[0]
-	if candidate.Strategy != "rule_thepaper_express" {
-		t.Fatalf("expected rule strategy, got %q with diagnostics %+v", candidate.Strategy, candidate.Diagnostics)
-	}
-	if !strings.Contains(strings.Join(candidate.Diagnostics, "|"), "命中内置站点规则") {
-		t.Fatalf("expected rule diagnostic, got %+v", candidate.Diagnostics)
+	for _, candidate := range res.Containers {
+		if strings.HasPrefix(candidate.Strategy, "rule_") {
+			t.Fatalf("unexpected site-specific built-in rule: %+v", candidate)
+		}
 	}
 }
 

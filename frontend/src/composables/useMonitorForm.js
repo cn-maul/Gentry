@@ -11,6 +11,13 @@ export function createEmptyForm() {
     monitorType: 'presence',
 
     extraction: {
+      sourceMode: 'html',
+      sourceUrl: '',
+      itemsPath: '',
+      filterPath: '',
+      filterEquals: '',
+      sourceHeaders: {},
+      sourceVariables: {},
       containerSelector: '',
       itemSelector: '',
       fields: [{ name: 'title', selector: 'a', type: 'text', attr: '', transform: '' }],
@@ -62,6 +69,18 @@ export function toMonitorRequest(form) {
       attr: f.attr || '',
       transform: f.transform || '',
     })),
+  }
+
+  if (form.extraction.sourceMode === 'api_json') {
+    payload.fetch_config = {
+      mode: 'api_json',
+      url: form.extraction.sourceUrl.trim(),
+      items_path: form.extraction.itemsPath.trim(),
+      filter_path: form.extraction.filterPath.trim(),
+      filter_equals: String(form.extraction.filterEquals ?? '').trim(),
+      headers: form.extraction.sourceHeaders || {},
+      ...(Object.keys(form.extraction.sourceVariables || {}).length ? { variables: form.extraction.sourceVariables } : {}),
+    }
   }
 
   if (form.monitorType === 'field_transition') {
@@ -124,6 +143,16 @@ export function fromMonitorResponse(data) {
   form.extraction.containerSelector = data.container || ''
   form.extraction.itemSelector = data.item || ''
   form.rule.pageMode = data.item ? 'list' : 'single'
+  const fetchConfig = parseJSONValue(data.fetch_config)
+  if (fetchConfig?.mode === 'api_json') {
+    form.extraction.sourceMode = 'api_json'
+    form.extraction.sourceUrl = fetchConfig.url || ''
+    form.extraction.itemsPath = fetchConfig.items_path || ''
+    form.extraction.filterPath = fetchConfig.filter_path || ''
+    form.extraction.filterEquals = fetchConfig.filter_equals ?? ''
+    form.extraction.sourceHeaders = fetchConfig.headers || {}
+    form.extraction.sourceVariables = fetchConfig.variables || {}
+  }
 
   if (data.fields && data.fields.length > 0) {
     form.extraction.fields = data.fields.map(f => ({
@@ -206,6 +235,7 @@ function detectionDefinition(form) {
     strategy_type: payload.strategy_type,
     strategy_config: payload.strategy_config || null,
     field_data_types: payload.field_data_types || {},
+    fetch_config: payload.fetch_config || null,
   }
 }
 
@@ -230,6 +260,16 @@ export function validateForm(form) {
     return '检查间隔不能小于 10 秒'
   }
   if (!form.extraction.containerSelector.trim()) return '容器选择器不能为空'
+  if (form.extraction.sourceMode === 'api_json') {
+    const sourceUrl = form.extraction.sourceUrl.trim().replace(/\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}/g, 'value')
+    try {
+      const parsed = new URL(sourceUrl)
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return 'JSON API URL 仅支持 HTTP 或 HTTPS'
+    } catch {
+      return 'JSON API URL 格式无效'
+    }
+    if (!form.extraction.itemsPath.trim()) return 'JSON API 列表路径不能为空'
+  }
   if (!form.extraction.fields.length) return '至少需要配置一个提取字段'
 
   const fieldNames = new Set()

@@ -6,7 +6,7 @@
     <header class="page-header">
       <div>
         <h1>扫描规则</h1>
-        <p>预扫描并保存可复用的网页提取规则</p>
+        <p>添加和管理可复用的网页与价格提取规则</p>
       </div>
       <div class="header-actions">
         <input ref="fileInput" class="file-input" type="file" accept="application/json,.json" @change="handleImportFile" />
@@ -23,10 +23,16 @@
 
     <section class="builder-section" aria-labelledby="quick-rule-title">
       <div class="section-title-row">
-        <h2 id="quick-rule-title">快速保存</h2>
-        <span v-if="scanResult" class="result-count">{{ candidates.length }} 个候选</span>
+        <h2 id="quick-rule-title">添加规则</h2>
+        <span v-if="builderMode === 'web' && scanResult" class="result-count">{{ candidates.length }} 个候选</span>
       </div>
 
+      <div class="builder-mode" role="tablist" aria-label="规则类型">
+        <button type="button" role="tab" :aria-selected="builderMode === 'web'" :class="{ active: builderMode === 'web' }" @click="builderMode = 'web'">网页规则</button>
+        <button type="button" role="tab" :aria-selected="builderMode === 'price_api'" :class="{ active: builderMode === 'price_api' }" @click="builderMode = 'price_api'">价格 API 规则</button>
+      </div>
+
+      <template v-if="builderMode === 'web'">
       <div class="scan-form">
         <div class="form-group url-field">
           <label for="rule-url">URL</label>
@@ -99,6 +105,139 @@
           {{ saving ? '保存中...' : '保存规则' }}
         </button>
       </div>
+      </template>
+
+      <template v-else>
+        <div class="price-builder">
+          <div class="price-grid primary-fields">
+            <div class="form-group">
+              <label for="price-rule-name">规则名称</label>
+              <input id="price-rule-name" v-model="ruleName" class="form-input" placeholder="例如：商城商品 SKU" />
+            </div>
+            <div class="form-group page-url-field">
+              <label for="price-page-url">页面 URL</label>
+              <input id="price-page-url" v-model="url" class="form-input" placeholder="https://shop.example/products/item" />
+            </div>
+          </div>
+
+          <div class="price-grid source-fields">
+            <div class="form-group api-url-field">
+              <label for="price-api-url">JSON API URL</label>
+              <input id="price-api-url" v-model="priceDraft.apiUrl" class="form-input" placeholder="https://shop.example/api/skus?id=31" />
+            </div>
+            <div class="form-group">
+              <label for="price-items-path">列表路径</label>
+              <input id="price-items-path" v-model="priceDraft.itemsPath" class="form-input" placeholder="data" />
+            </div>
+            <div class="form-group">
+              <label for="price-filter-path">过滤字段</label>
+              <input id="price-filter-path" v-model="priceDraft.filterPath" class="form-input" placeholder="is_selling" />
+            </div>
+            <div class="form-group">
+              <label for="price-filter-value">过滤值</label>
+              <input id="price-filter-value" v-model="priceDraft.filterEquals" class="form-input" placeholder="true" />
+            </div>
+          </div>
+
+          <div class="variable-section">
+            <div class="variable-heading">
+              <div>
+                <strong>动态参数</strong>
+                <span>先从商品页面提取，再替换 API URL 中的 &#123;&#123;参数名&#125;&#125;</span>
+              </div>
+              <button type="button" class="btn btn-ghost btn-sm" @click="addPriceVariable">添加参数</button>
+            </div>
+            <div v-for="(variable, index) in priceDraft.variables" :key="index" class="variable-row">
+              <div class="form-group">
+                <label :for="`price-variable-name-${index}`">参数名</label>
+                <input :id="`price-variable-name-${index}`" v-model="variable.name" class="form-input" placeholder="goods_id" />
+              </div>
+              <div class="form-group">
+                <label :for="`price-variable-selector-${index}`">页面选择器</label>
+                <input :id="`price-variable-selector-${index}`" v-model="variable.selector" class="form-input" placeholder="#goods_id" />
+              </div>
+              <div class="form-group">
+                <label :for="`price-variable-attr-${index}`">取值属性</label>
+                <input :id="`price-variable-attr-${index}`" v-model="variable.attr" class="form-input" placeholder="value（留空则取文本）" />
+              </div>
+              <button type="button" class="icon-button danger variable-remove" title="删除动态参数" @click="removePriceVariable(index)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"/><path d="m19 6-1 14H6L5 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="price-grid mapping-fields">
+            <div class="form-group">
+              <label for="price-title-path">标题路径</label>
+              <input id="price-title-path" v-model="priceDraft.titlePath" class="form-input" placeholder="spec_array.*.value" />
+            </div>
+            <div class="form-group">
+              <label for="price-identity-path">商品身份路径</label>
+              <input id="price-identity-path" v-model="priceDraft.identityPath" class="form-input" placeholder="products_no" />
+            </div>
+            <div class="form-group">
+              <label for="price-value-path">价格路径</label>
+              <input id="price-value-path" v-model="priceDraft.pricePath" class="form-input" placeholder="sell_price" />
+            </div>
+            <div class="form-group">
+              <label for="price-original-path">原价路径</label>
+              <input id="price-original-path" v-model="priceDraft.originalPricePath" class="form-input" placeholder="original_price" />
+            </div>
+          </div>
+
+          <div class="price-grid header-fields">
+            <div class="form-group">
+              <label for="price-accept">Accept</label>
+              <input id="price-accept" v-model="priceDraft.headers.Accept" class="form-input" placeholder="application/json" />
+            </div>
+            <div class="form-group">
+              <label for="price-language">Accept-Language</label>
+              <input id="price-language" v-model="priceDraft.headers['Accept-Language']" class="form-input" placeholder="zh-CN,zh;q=0.9" />
+            </div>
+            <div class="form-group">
+              <label for="price-referer">Referer</label>
+              <input id="price-referer" v-model="priceDraft.headers.Referer" class="form-input" :placeholder="url || 'https://shop.example/products/item'" />
+            </div>
+            <div class="form-group">
+              <label for="price-requested-with">X-Requested-With</label>
+              <input id="price-requested-with" v-model="priceDraft.headers['X-Requested-With']" class="form-input" placeholder="XMLHttpRequest" />
+            </div>
+          </div>
+
+          <div v-if="priceError" class="inline-error">{{ priceError }}</div>
+          <div v-if="priceValidation" class="price-preview">
+            <div class="preview-heading">
+              <strong>提取结果</strong>
+              <span>{{ priceValidation.extracted_items }} 条</span>
+            </div>
+            <div class="sample-list">
+              <div v-for="(item, index) in priceSamples" :key="index" class="sample-line">
+                <span class="sample-title">{{ item.title || item.sku || item.item_key || '未命名商品' }}</span>
+                <span class="sample-price">{{ item.price || item.normalized || item.raw }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="price-actions">
+            <div class="scope-field">
+              <span class="field-label">适用范围</span>
+              <div class="scope-control">
+                <button type="button" :class="{ active: scopeType === 'exact' }" @click="scopeType = 'exact'">当前页面</button>
+                <button type="button" :disabled="!sectionScopeAvailable" :class="{ active: scopeType === 'section' }" title="匹配同一网站、同一目录下的商品页" @click="scopeType = 'section'">同站目录</button>
+                <button type="button" :class="{ active: scopeType === 'global' }" @click="scopeType = 'global'">通用结构</button>
+              </div>
+            </div>
+            <div class="scope-summary">{{ scopeSummary }}</div>
+            <button class="btn btn-ghost" :disabled="priceTesting" @click="handleTestPriceRule">
+              {{ priceTesting ? '测试中...' : '测试提取' }}
+            </button>
+            <button v-if="editingRule" class="btn btn-ghost" :disabled="saving" @click="resetBuilder">取消编辑</button>
+            <button class="btn btn-primary" :disabled="saving || priceTesting || !ruleName.trim()" @click="handleSavePriceRule">
+              {{ saving ? '保存中...' : (editingRule ? '更新规则' : '保存规则') }}
+            </button>
+          </div>
+        </div>
+      </template>
     </section>
 
     <section class="library-section" aria-labelledby="rule-library-title">
@@ -114,6 +253,7 @@
           <div class="rule-main">
             <div class="rule-heading">
               <strong>{{ rule.name }}</strong>
+              <span class="source-badge" :class="{ api: isAPIRule(rule) }">{{ isAPIRule(rule) ? '价格 API' : '网页' }}</span>
               <span class="scope-badge" :class="`scope-${rule.scope_type || 'legacy'}`">{{ scopeName(rule) }}</span>
               <span v-if="!rule.enabled" class="disabled-badge">已禁用</span>
             </div>
@@ -125,9 +265,14 @@
               <span class="field-count">{{ (rule.fields || []).length }} 个字段</span>
             </div>
           </div>
-          <button class="icon-button danger" title="删除规则" @click="handleDelete(rule)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg>
-          </button>
+          <div class="rule-actions">
+            <button v-if="isAPIRule(rule)" class="icon-button" title="编辑价格规则" @click="startEditPriceRule(rule)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>
+            </button>
+            <button class="icon-button danger" title="删除规则" @click="handleDelete(rule)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg>
+            </button>
+          </div>
         </article>
       </div>
     </section>
@@ -135,14 +280,22 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
-import { deleteScanRule, exportScanRules, fetchScanRules, importScanRules, previewScan, quickCreateScanRule } from '../api/monitors'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { deleteScanRule, exportScanRules, fetchScanRules, importScanRules, previewScan, quickCreateScanRule, updateScanRule, validateMonitorConfig } from '../api/monitors'
+import {
+  buildPriceRuleConfig,
+  buildPriceRuleValidationRequest,
+  createEmptyPriceRuleDraft,
+  priceRuleFingerprint,
+  validatePriceRuleDraft,
+} from '../composables/usePriceScanRuleBuilder'
 import { useToastMessages } from '../composables/useToastMessages'
 
 const { successMsg, pageErrorMsg, showSuccess, showError } = useToastMessages()
 
 const loading = ref(true)
 const rules = ref([])
+const builderMode = ref('web')
 const url = ref('')
 const keywords = ref('')
 const scanning = ref(false)
@@ -156,27 +309,58 @@ const saving = ref(false)
 const importing = ref(false)
 const exporting = ref(false)
 const fileInput = ref(null)
+const priceDraft = reactive(createEmptyPriceRuleDraft())
+const priceTesting = ref(false)
+const priceError = ref('')
+const priceValidation = ref(null)
+const priceValidatedFingerprint = ref('')
+const editingRule = ref(null)
 
 const candidates = computed(() => scanResult.value?.containers || [])
 const selectedCandidate = computed(() => selectedIndex.value === null ? null : candidates.value[selectedIndex.value])
+const priceSamples = computed(() => priceValidation.value?.items?.[0]?.samples || [])
 const parsedURL = computed(() => {
   try { return new URL(url.value.trim()) } catch { return null }
 })
 const routeScopeAvailable = computed(() => Boolean(parsedURL.value && (parsedURL.value.pathname !== '/' || parsedURL.value.search)))
+const sectionScopeAvailable = computed(() => Boolean(parsedURL.value && parsedURL.value.pathname.split('/').filter(Boolean).length > 1))
 const scopeSummary = computed(() => {
   if (scopeType.value === 'global') return '所有网站中结构相同的页面'
   if (!parsedURL.value) return ''
+  if (scopeType.value === 'section') {
+    const parts = parsedURL.value.pathname.split('/').filter(Boolean)
+    return `${parsedURL.value.host}/${parts.slice(0, -1).join('/')}/*`
+  }
   if (scopeType.value === 'route') return `${parsedURL.value.host}${parsedURL.value.pathname}${parsedURL.value.search}`
   return parsedURL.value.href
 })
 
 watch([url, keywords], () => {
+  if (builderMode.value !== 'web') return
   scanResult.value = null
   selectedIndex.value = null
   scanned.value = false
   scanError.value = ''
   ruleName.value = ''
   scopeType.value = 'exact'
+})
+
+watch([url, () => JSON.stringify(priceDraft)], () => {
+  if (builderMode.value !== 'price_api') return
+  priceValidation.value = null
+  priceValidatedFingerprint.value = ''
+  priceError.value = ''
+})
+
+watch(builderMode, mode => {
+  scanError.value = ''
+  priceError.value = ''
+  if (mode === 'web') {
+    editingRule.value = null
+    scopeType.value = 'exact'
+  } else if (!editingRule.value) {
+    scopeType.value = 'section'
+  }
 })
 
 onMounted(loadRules)
@@ -231,6 +415,104 @@ async function handleSave() {
   } finally {
     saving.value = false
   }
+}
+
+async function handleTestPriceRule() {
+  const localError = validatePriceRuleDraft(url.value, priceDraft)
+  if (localError) {
+    priceError.value = localError
+    return false
+  }
+  priceTesting.value = true
+  priceError.value = ''
+  priceValidation.value = null
+  try {
+    const response = await validateMonitorConfig(buildPriceRuleValidationRequest(url.value, priceDraft))
+    if (response.code !== 0 || !response.data?.valid) {
+      throw new Error(response.message || response.data?.summary || '提取测试失败')
+    }
+    priceValidation.value = response.data
+    priceValidatedFingerprint.value = priceRuleFingerprint(url.value, priceDraft)
+    return true
+  } catch (error) {
+    priceError.value = errorMessage(error)
+    return false
+  } finally {
+    priceTesting.value = false
+  }
+}
+
+async function handleSavePriceRule() {
+  if (!ruleName.value.trim()) return
+  if (priceValidatedFingerprint.value !== priceRuleFingerprint(url.value, priceDraft)) {
+    if (!await handleTestPriceRule()) return
+  }
+  saving.value = true
+  try {
+    const config = buildPriceRuleConfig(priceDraft)
+    if (editingRule.value) {
+      await updateScanRule(editingRule.value.id, {
+        name: ruleName.value.trim(),
+        url_contains: editingRule.value.url_contains || '',
+        source_url: url.value.trim(),
+        scope_type: scopeType.value,
+        container: config.container,
+        item: config.item,
+        priority: editingRule.value.priority || 50,
+        enabled: editingRule.value.enabled !== false,
+        description: editingRule.value.description || '通过价格规则编辑器生成',
+        fetch_config: config.fetch_config,
+        fields: config.fields,
+      })
+      showSuccess('价格规则已更新')
+    } else {
+      await quickCreateScanRule({
+        name: ruleName.value.trim(),
+        url: url.value.trim(),
+        scope_type: scopeType.value,
+        config,
+      })
+      showSuccess('价格规则已保存')
+    }
+    resetBuilder()
+    await loadRules()
+  } catch (error) {
+    showError('保存价格规则失败: ' + errorMessage(error))
+  } finally {
+    saving.value = false
+  }
+}
+
+function startEditPriceRule(rule) {
+  let fetchConfig = rule.fetch_config || {}
+  if (typeof fetchConfig === 'string') {
+    try { fetchConfig = JSON.parse(fetchConfig) } catch { fetchConfig = {} }
+  }
+  const fields = rule.fields || []
+  const fieldPath = name => fields.find(field => field.name === name)?.selector || ''
+  editingRule.value = rule
+  builderMode.value = 'price_api'
+  url.value = rule.source_url || ''
+  ruleName.value = rule.name || ''
+  scopeType.value = rule.scope_type || 'exact'
+  Object.assign(priceDraft, createEmptyPriceRuleDraft(), {
+    apiUrl: fetchConfig.url || '',
+    itemsPath: fetchConfig.items_path || rule.container || 'data',
+    filterPath: fetchConfig.filter_path || '',
+    filterEquals: fetchConfig.filter_equals ?? '',
+    headers: { ...createEmptyPriceRuleDraft().headers, ...(fetchConfig.headers || {}) },
+    variables: Object.entries(fetchConfig.variables || {}).map(([name, variable]) => ({
+      name, selector: variable.selector || '', attr: variable.attr || '',
+    })),
+    titlePath: fieldPath('title'),
+    identityPath: fieldPath('sku') || fieldPath('products_no'),
+    pricePath: fieldPath('price') || fieldPath('sell_price'),
+    originalPricePath: fieldPath('original_price'),
+  })
+  priceValidation.value = null
+  priceValidatedFingerprint.value = ''
+  priceError.value = ''
+  document.querySelector('.builder-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 async function handleDelete(rule) {
@@ -290,7 +572,20 @@ function resetBuilder() {
   selectedIndex.value = null
   scanned.value = false
   ruleName.value = ''
-  scopeType.value = 'exact'
+  scopeType.value = builderMode.value === 'price_api' ? 'section' : 'exact'
+  Object.assign(priceDraft, createEmptyPriceRuleDraft())
+  priceValidation.value = null
+  priceValidatedFingerprint.value = ''
+  priceError.value = ''
+  editingRule.value = null
+}
+
+function addPriceVariable() {
+  priceDraft.variables.push({ name: '', selector: '', attr: '' })
+}
+
+function removePriceVariable(index) {
+  priceDraft.variables.splice(index, 1)
 }
 
 function candidateKey(candidate, index) {
@@ -300,6 +595,7 @@ function candidateKey(candidate, index) {
 function scopeName(rule) {
   if (rule.scope_type === 'exact') return '页面'
   if (rule.scope_type === 'route') return '路由'
+  if (rule.scope_type === 'section') return '同站目录'
   if (rule.scope_type === 'global') return '通用'
   return '旧版'
 }
@@ -307,6 +603,12 @@ function scopeName(rule) {
 function scopeTarget(rule) {
   if (rule.scope_type === 'global') return '所有网站中结构相同的页面'
   return rule.source_url || `URL 包含 ${rule.url_contains}`
+}
+
+function isAPIRule(rule) {
+  if (!rule.fetch_config) return false
+  if (typeof rule.fetch_config === 'object') return rule.fetch_config.mode === 'api_json'
+  try { return JSON.parse(rule.fetch_config).mode === 'api_json' } catch { return false }
 }
 
 function strategyLabel(strategy) {
@@ -322,7 +624,7 @@ function strategyLabel(strategy) {
 }
 
 function strategyClass(strategy) {
-  return strategy?.startsWith('template_') ? 'strategy-rule' : 'strategy-heuristic'
+  return strategy?.startsWith('template_') || strategy?.startsWith('rule_') ? 'strategy-rule' : 'strategy-heuristic'
 }
 
 function errorMessage(error) {
@@ -345,6 +647,10 @@ function errorMessage(error) {
 .section-title-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .section-title-row h2 { margin: 0; color: var(--text); font-size: 1rem; font-weight: 700; }
 .result-count, .library-title > span { color: var(--text-muted); font-size: 0.75rem; }
+.builder-mode { display: inline-grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 1rem; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; }
+.builder-mode button { min-height: 36px; padding: 0 1rem; border: 0; border-right: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-secondary); cursor: pointer; font-size: 0.8125rem; }
+.builder-mode button:last-child { border-right: 0; }
+.builder-mode button.active { background: var(--green); color: #000; font-weight: 700; }
 
 .scan-form { display: grid; grid-template-columns: minmax(280px, 2fr) minmax(200px, 1fr) auto; align-items: end; gap: 0.75rem; }
 .scan-form .form-group { min-width: 0; margin: 0; }
@@ -385,12 +691,35 @@ function errorMessage(error) {
 .scope-summary { align-self: center; min-width: 0; overflow: hidden; color: var(--text-muted); font-size: 0.75rem; text-overflow: ellipsis; white-space: nowrap; }
 .save-button { height: 38px; }
 
+.price-builder { display: grid; gap: 0.85rem; }
+.price-grid { display: grid; gap: 0.75rem; }
+.price-grid .form-group { min-width: 0; margin: 0; }
+.primary-fields { grid-template-columns: minmax(220px, 1fr) minmax(320px, 2fr); }
+.source-fields { grid-template-columns: minmax(300px, 2fr) repeat(3, minmax(140px, 1fr)); }
+.mapping-fields, .header-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.variable-section { padding: 0.85rem 0; border-top: 1px solid var(--border-light); border-bottom: 1px solid var(--border-light); }
+.variable-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.variable-heading > div { display: grid; gap: 0.2rem; }
+.variable-heading strong { font-size: 0.8125rem; }
+.variable-heading span { color: var(--text-muted); font-size: 0.75rem; }
+.variable-row { display: grid; grid-template-columns: minmax(140px, 0.7fr) minmax(220px, 1.5fr) minmax(180px, 1fr) auto; align-items: end; gap: 0.75rem; margin-top: 0.75rem; }
+.variable-row .form-group { min-width: 0; margin: 0; }
+.variable-remove { margin-bottom: 2px; }
+.price-preview { padding: 0.85rem 0; border-top: 1px solid var(--border-light); border-bottom: 1px solid var(--border-light); }
+.preview-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.55rem; font-size: 0.8125rem; }
+.preview-heading span { color: var(--text-muted); font-size: 0.75rem; }
+.sample-price { flex-shrink: 0; color: var(--green); font-variant-numeric: tabular-nums; }
+.price-actions { display: grid; grid-template-columns: auto minmax(160px, 1fr) repeat(3, auto); align-items: end; gap: 0.75rem; padding-top: 0.15rem; }
+.price-actions .btn { height: 38px; }
+
 .rule-list { border-top: 1px solid var(--border); }
 .rule-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid var(--border-light); }
 .rule-main { min-width: 0; }
 .rule-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
 .rule-heading strong { font-size: 0.875rem; }
-.scope-badge, .disabled-badge { padding: 0.14rem 0.45rem; border-radius: 4px; font-size: 0.6875rem; font-weight: 700; }
+.source-badge, .scope-badge, .disabled-badge { padding: 0.14rem 0.45rem; border-radius: 4px; font-size: 0.6875rem; font-weight: 700; }
+.source-badge { color: var(--text-secondary); background: var(--bg-elevated); }
+.source-badge.api { color: var(--green); }
 .scope-badge { background: var(--bg-elevated); color: var(--text-secondary); }
 .scope-global { color: var(--green); }
 .disabled-badge { color: var(--warning); background: var(--warning-bg); }
@@ -401,12 +730,16 @@ function errorMessage(error) {
 .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: 0 0 34px; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); cursor: pointer; }
 .icon-button:hover { background: var(--error-bg); color: var(--error); }
 .icon-button svg { width: 17px; height: 17px; }
+.rule-actions { display: flex; align-items: center; flex-shrink: 0; }
 .list-state { padding: 2.5rem 0; color: var(--text-secondary); text-align: center; font-size: 0.8125rem; }
 
 @media (max-width: 900px) {
   .scan-form { grid-template-columns: 1fr 1fr; }
   .scan-button { grid-column: 1 / -1; justify-self: start; }
   .save-panel { grid-template-columns: 1fr 1fr; }
+  .source-fields, .mapping-fields, .header-fields, .variable-row { grid-template-columns: 1fr 1fr; }
+  .price-actions { grid-template-columns: 1fr 1fr; }
+  .price-actions .scope-summary { order: initial; }
   .scope-summary { order: 3; }
   .save-button { order: 4; justify-self: end; }
 }
@@ -414,8 +747,12 @@ function errorMessage(error) {
 @media (max-width: 640px) {
   .page-header { align-items: stretch; flex-direction: column; }
   .header-actions { align-self: flex-start; }
-  .scan-form, .save-panel { grid-template-columns: 1fr; }
+  .builder-mode { width: 100%; }
+  .scan-form, .save-panel, .primary-fields, .source-fields, .mapping-fields, .header-fields, .variable-row, .price-actions { grid-template-columns: 1fr; }
+  .variable-heading { align-items: stretch; flex-direction: column; }
+  .variable-remove { justify-self: end; }
   .scan-button, .save-button { width: 100%; justify-self: stretch; }
+  .price-actions .btn { width: 100%; }
   .scope-control { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .scope-control button { padding-inline: 0.35rem; white-space: normal; }
   .scope-summary, .save-button { order: initial; }

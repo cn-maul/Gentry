@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 type Fetcher struct {
@@ -27,6 +28,12 @@ func (f *Fetcher) Fetch(url string) (string, error) {
 
 // FetchContext 执行支持取消和超时传递的 HTTP 请求。
 func (f *Fetcher) FetchContext(ctx context.Context, url string) (string, error) {
+	return f.FetchContextWithHeaders(ctx, url, nil)
+}
+
+// FetchContextWithHeaders executes a request with a small caller-provided
+// header set. Hop-by-hop and host headers are never accepted.
+func (f *Fetcher) FetchContextWithHeaders(ctx context.Context, url string, headers map[string]string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -35,8 +42,17 @@ func (f *Fetcher) FetchContext(ctx context.Context, url string) (string, error) 
 		return "", fmt.Errorf("创建请求失败: %w", err)
 	}
 
-	// 设置User-Agent（唯一直接管理的Header）
+	// 设置浏览器兼容的默认请求头；数据源只能覆盖受控白名单。
 	req.Header.Set("User-Agent", f.config.userAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	for name, value := range headers {
+		canonical := http.CanonicalHeaderKey(strings.TrimSpace(name))
+		switch canonical {
+		case "Accept", "Accept-Language", "Referer", "X-Requested-With":
+			req.Header.Set(canonical, value)
+		}
+	}
 
 	// 执行请求（所有网络行为委托给http.Client）
 	resp, err := f.config.client.Do(req)

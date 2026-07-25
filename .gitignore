@@ -17,6 +17,8 @@ gentry-windows-amd64.exe
 .codex-sheet-work/
 *.db-wal
 *.db-shm
+gentry-linux-amd64
+.update-e2e-test/
 *.xlsx
 alterbot
 alterbot.exe

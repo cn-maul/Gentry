@@ -1,0 +1,25 @@
+services:
+  gentry:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gentry:latest
+    container_name: gentry
+    restart: unless-stopped
+    ports:
+      - "8889:8889"
+    volumes:
+      - gentry-data:/app/data
+    environment:
+      - GIN_MODE=release
+      - PORT=8889
+      - TZ=Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8889/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  gentry-data:

@@ -1,8 +1,10 @@
 package monitor
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -47,6 +49,7 @@ type ScanMonitorConfig struct {
 	Container string            `json:"container"`
 	Item      string            `json:"item"`
 	Fields    []ScanFieldConfig `json:"fields"`
+	Fetch     *FetchConfig      `json:"fetch_config,omitempty"`
 }
 
 type ScanFieldConfig struct {
@@ -58,8 +61,9 @@ type ScanFieldConfig struct {
 }
 
 type ScanSettings struct {
-	URL      string   `json:"url"`
-	Keywords []string `json:"keywords"`
+	URL          string   `json:"url"`
+	Keywords     []string `json:"keywords"`
+	StrategyType string   `json:"strategy_type,omitempty"`
 }
 
 type scanStrategyResult struct {
@@ -297,10 +301,13 @@ func scanRuleStrategies(doc *goquery.Document, settings *ScanSettings) []scanStr
 	var results []scanStrategyResult
 	settingsURL := ""
 	if settings != nil {
-		settingsURL = strings.ToLower(settings.URL)
+		settingsURL = settings.URL
 	}
 	for _, rule := range append(buildUserTemplateRules(), CurrentScanRules()...) {
-		if rule.urlPattern != "" && !strings.Contains(settingsURL, strings.ToLower(rule.urlPattern)) {
+		if rule.matchesURL != nil && !rule.matchesURL(settingsURL) {
+			continue
+		}
+		if rule.matchesURL == nil && rule.urlPattern != "" && !strings.Contains(strings.ToLower(settingsURL), strings.ToLower(rule.urlPattern)) {
 			continue
 		}
 		results = append(results, rule.build(doc, settings)...)
@@ -473,12 +480,101 @@ func smartScanHTML(html string, keywords []string) (*ScanResult, error) {
 }
 
 func SmartScan(settings *ScanSettings) (*ScanResult, error) {
+	if settings == nil {
+		return nil, fmt.Errorf("扫描配置不能为空")
+	}
 	f := fetcher.New()
+	apiCandidates := scanJSONTemplateCandidates(settings, f)
+	// Explicit API rules are deterministic and do not need the monitored page
+	// itself to be fetchable. This also lets API-backed presence monitors reuse
+	// exactly the same scan-rule library.
+	if len(apiCandidates) > 0 {
+		return &ScanResult{URL: settings.URL, Containers: apiCandidates}, nil
+	}
 	html, err := f.Fetch(settings.URL)
 	if err != nil {
 		return nil, fmt.Errorf("抓取页面失败: %w", err)
 	}
-	return smartScanHTMLWithSettings(html, settings)
+
+	htmlResult, err := smartScanHTMLWithSettings(html, settings)
+	if err != nil {
+		return nil, err
+	}
+	if settings.StrategyType == "field_transition" {
+		var ruleCandidates []ContainerInfo
+		for _, candidate := range htmlResult.Containers {
+			if strings.HasPrefix(candidate.Strategy, "template_") || strings.HasPrefix(candidate.Strategy, "rule_") {
+				ruleCandidates = append(ruleCandidates, candidate)
+			}
+		}
+		if len(ruleCandidates) > 0 {
+			htmlResult.Containers = ruleCandidates
+		}
+	}
+	return htmlResult, nil
+}
+
+func scanJSONTemplateCandidates(settings *ScanSettings, client *fetcher.Fetcher) []ContainerInfo {
+	db := database.GetDB()
+	if db == nil {
+		return nil
+	}
+	var templates []database.ScanRuleTemplate
+	if err := db.Preload("Fields").Where("enabled = ?", true).Order("priority desc, id asc").Find(&templates).Error; err != nil {
+		log.Printf("[ScannerRules] 加载 JSON API 规则失败: %v", err)
+		return nil
+	}
+	var candidates []ContainerInfo
+	for _, template := range templates {
+		if !ScanRuleMatchesURL(template, settings.URL) {
+			continue
+		}
+		config, err := ParseFetchConfig(template.FetchConfig, settings.URL)
+		if err != nil || config.Mode != FetchModeAPIJSON {
+			continue
+		}
+		candidate, err := buildJSONScanCandidate("template_"+template.Name, "命中用户扫描规则模板", config, settings.URL, template.Fields, client)
+		if err != nil {
+			log.Printf("[ScannerRules] JSON API 规则「%s」扫描失败: %v", template.Name, err)
+			continue
+		}
+		candidates = append(candidates, candidate)
+	}
+	return candidates
+}
+
+func buildJSONScanCandidate(strategy, diagnostic string, config FetchConfig, sourceURL string, fields []database.ScanRuleField, client *fetcher.Fetcher) (ContainerInfo, error) {
+	resolved, err := ResolveFetchConfig(context.Background(), config, sourceURL, client)
+	if err != nil {
+		return ContainerInfo{}, err
+	}
+	body, err := client.FetchContextWithHeaders(context.Background(), resolved.URL, resolved.Headers)
+	if err != nil {
+		return ContainerInfo{}, err
+	}
+	siteFields := make([]database.SiteField, 0, len(fields))
+	for _, field := range fields {
+		siteFields = append(siteFields, database.SiteField{
+			Name: field.Name, Selector: field.Selector, Type: field.Type,
+			Attr: field.Attr, Transform: field.Transform,
+		})
+	}
+	items, err := extractJSONResults(body, resolved, siteFields)
+	if err != nil {
+		return ContainerInfo{}, err
+	}
+	fieldConfigs := scanRuleFieldsToConfigFields(fields)
+	limit := len(items)
+	if limit > 10 {
+		limit = 10
+	}
+	return ContainerInfo{
+		Selector: config.ItemsPath, ContainerTag: "JSON", ContainerCSS: config.ItemsPath,
+		ItemTag: "OBJECT", ItemCSS: "*", ItemCount: len(items), KeywordHits: 1,
+		SampleItems: items[:limit], Strategy: strategy, Confidence: 100,
+		Diagnostics: []string{diagnostic, fmt.Sprintf("JSON API 提取到 %d 个条目", len(items))},
+		Config:      ScanMonitorConfig{Container: config.ItemsPath, Item: "*", Fields: fieldConfigs, Fetch: &config},
+	}, nil
 }
 
 func buildScanConfig(parent *goquery.Selection, itemCSS string, samples []ExtractResult) ScanMonitorConfig {
@@ -497,7 +593,10 @@ func buildScanConfig(parent *goquery.Selection, itemCSS string, samples []Extrac
 func inferScanFields(parent *goquery.Selection, itemCSS string, samples []ExtractResult) []ScanFieldConfig {
 	titleSelector := inferTitleSelector(parent, itemCSS, samples)
 	fields := []ScanFieldConfig{{Name: "title", Selector: titleSelector, Type: "text"}}
-	if selector := inferURLSelector(parent, itemCSS, titleSelector); selector != "" {
+	item := parent.Find(itemCSS).First()
+	if item.Is("a") && item.AttrOr("href", "") != "" {
+		fields = append(fields, ScanFieldConfig{Name: "url", Selector: "", Type: "attr", Attr: "href"})
+	} else if selector := inferURLSelector(parent, itemCSS, titleSelector); selector != "" {
 		fields = append(fields, ScanFieldConfig{Name: "url", Selector: selector, Type: "attr", Attr: "href"})
 	}
 	if selector := inferDateSelector(parent, itemCSS, samples); selector != "" {
@@ -890,10 +989,22 @@ func buildShortSelector(sel *goquery.Selection, tag string) string {
 	if base == "" {
 		base = tag
 	}
+	// 裸标签或重复 class 往往会同时命中导航、页脚和正文列表。
+	// 当短选择器不唯一时，保留父级路径来限定到实际扫描到的容器。
+	root := sel.ParentsFiltered("html")
+	if root.Length() > 0 && root.Find(base).Length() > 1 {
+		if deep := buildDeepSelector(sel); deep != "" {
+			return deep
+		}
+	}
 	return base
 }
 
 func detectItemPattern(sel *goquery.Selection) (tag, css string) {
+	if tag, css, ok := detectDirectArticleAnchors(sel); ok {
+		return tag, css
+	}
+
 	analysis := analyzeChildren(sel)
 
 	if analysis.articleCardCount >= 2 && analysis.articleCardTag != "" && analysis.articleCardClass != "" {
@@ -920,6 +1031,54 @@ func detectItemPattern(sel *goquery.Selection) (tag, css string) {
 		return bestTag, bestTag
 	}
 	return "", ""
+}
+
+func detectDirectArticleAnchors(sel *goquery.Selection) (tag, css string, ok bool) {
+	anchors := sel.ChildrenFiltered("a[href]")
+	if anchors.Length() < 2 {
+		return "", "", false
+	}
+
+	meaningful := 0
+	detailLinks := 0
+	classCounts := make(map[string]int)
+	anchors.Each(func(_ int, anchor *goquery.Selection) {
+		if strings.TrimSpace(anchor.Text()) == "" {
+			return
+		}
+		meaningful++
+		if href, exists := anchor.Attr("href"); exists && isLikelyDetailHref(href) {
+			detailLinks++
+		}
+		if class, exists := anchor.Attr("class"); exists {
+			for _, name := range strings.Fields(class) {
+				if len(name) > 1 && !strings.HasPrefix(name, "ng-") && !strings.HasPrefix(name, "_") {
+					classCounts[name]++
+				}
+			}
+		}
+	})
+	if meaningful < 2 || detailLinks*2 < meaningful {
+		return "", "", false
+	}
+
+	bestClass := ""
+	bestCount := 0
+	for name, count := range classCounts {
+		if count > bestCount {
+			bestClass = name
+			bestCount = count
+		}
+	}
+	if bestClass != "" && bestCount*2 >= meaningful {
+		return "a", "a." + bestClass, true
+	}
+	return "a", "a", true
+}
+
+func isLikelyDetailHref(href string) bool {
+	path := strings.ToLower(strings.SplitN(strings.TrimSpace(href), "?", 2)[0])
+	return strings.HasSuffix(path, ".html") || strings.HasSuffix(path, ".htm") || strings.HasSuffix(path, ".jhtml")
 }
 
 func extractContainerItems(entry *scanContainerEntry) {
@@ -1030,18 +1189,10 @@ func extractContainerItems(entry *scanContainerEntry) {
 }
 
 func isDateLike(text string) bool {
-	if text == "" {
-		return false
-	}
-	markers := []string{"202", "20", "年", "月", "日", "-", "/"}
-	count := 0
-	for _, m := range markers {
-		if strings.Contains(text, m) {
-			count++
-		}
-	}
-	return count >= 2
+	return dateLikePattern.MatchString(strings.TrimSpace(text))
 }
+
+var dateLikePattern = regexp.MustCompile(`20\d{2}(?:[-/.]\d{1,2}[-/.]\d{1,2}|年\d{1,2}月\d{1,2}日?|\.\d{4})`)
 
 func candidateScore(entry *scanContainerEntry, strategy string) int {
 	validTitles := 0
@@ -1058,7 +1209,7 @@ func candidateScore(entry *scanContainerEntry, strategy string) int {
 			dateCount++
 		}
 	}
-	score := entry.hits*12 + validTitles*20 + urlCount*15 + dateCount*8 + len(entry.items)*6
+	score := min(entry.hits, 10)*12 + validTitles*20 + urlCount*15 + dateCount*8 + len(entry.items)*6
 	switch strategy {
 	case "keyword_ancestor":
 		score += 18
@@ -1069,6 +1220,9 @@ func candidateScore(entry *scanContainerEntry, strategy string) int {
 	case "link_cluster":
 		score += 8
 	}
+	if strings.HasPrefix(strategy, "template_") || strings.HasPrefix(strategy, "rule_") {
+		score += 1000
+	}
 	if countArticleCards(entry.parent) >= 2 {
 		score += 18
 	}
@@ -1076,7 +1230,11 @@ func candidateScore(entry *scanContainerEntry, strategy string) int {
 		score -= 10
 	}
 	if len(entry.items) > 0 && urlCount == 0 {
-		score -= 8
+		// 公告/文章列表通常应带详情链接。元数据块即使命中关键词，
+		// 也不能压过同时包含标题和详情链接的真实内容列表。
+		score -= 80
+	} else if validTitles > 0 && urlCount*2 < validTitles {
+		score -= 25
 	}
 	if isLikelyNoiseContainer(entry.parent) {
 		score -= 80

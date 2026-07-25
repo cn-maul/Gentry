@@ -1,16 +1,16 @@
 <template>
   <div class="monitor-form">
-    <MonitorTypeSelector v-model="form.monitorType" v-if="showTypeSelector" />
+    <MonitorTypeSelector :modelValue="form.monitorType" @update:modelValue="$emit('change:type', $event)" v-if="showTypeSelector" />
 
-    <BasicMonitorForm v-model="form.basic" />
+    <BasicMonitorForm v-model="form.basic" :monitorType="form.monitorType" />
 
-    <ExtractionEditor
-      v-model="form.extraction"
-      :url="form.basic.url"
-      :monitorType="form.monitorType"
-    />
+    <template v-if="form.monitorType === 'presence'">
+      <ExtractionEditor v-model="form.extraction" :url="form.basic.url" />
+      <PresenceRuleEditor />
+    </template>
 
-    <template v-if="form.monitorType === 'field_transition'">
+    <template v-else>
+      <PriceExtractionEditor :form="form" @update:form="updateForm" />
       <NumericTransitionRuleEditor :form="form" @update:form="updateForm" />
     </template>
 
@@ -22,11 +22,11 @@
 
     <div class="validation-actions">
       <div>
-        <strong>创建前验证</strong>
-        <p>只读取网页，不写入快照或发送通知。</p>
+        <strong>{{ form.monitorType === 'field_transition' ? '验证商品与价格' : '验证网页提取' }}</strong>
+        <p>{{ form.monitorType === 'field_transition' ? '检查商品身份、价格解析和重复 SKU。' : '检查页面区域和内容字段。' }}</p>
       </div>
       <button class="btn btn-ghost" type="button" :disabled="validationLoading" @click="$emit('validate')">
-        {{ validationLoading ? '验证中...' : '验证配置' }}
+        {{ validationLoading ? '验证中...' : (form.monitorType === 'field_transition' ? '验证价格' : '验证网页') }}
       </button>
     </div>
 
@@ -59,7 +59,9 @@
 import MonitorTypeSelector from './MonitorTypeSelector.vue'
 import BasicMonitorForm from './BasicMonitorForm.vue'
 import ExtractionEditor from './ExtractionEditor.vue'
+import PriceExtractionEditor from './PriceExtractionEditor.vue'
 import NumericTransitionRuleEditor from './NumericTransitionRuleEditor.vue'
+import PresenceRuleEditor from './PresenceRuleEditor.vue'
 import NotificationEditor from './NotificationEditor.vue'
 import MonitorValidationPanel from './MonitorValidationPanel.vue'
 import MonitorFormSummary from './MonitorFormSummary.vue'
@@ -74,7 +76,7 @@ const props = defineProps({
   showBaselineWarning: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['update:form', 'validate'])
+const emit = defineEmits(['update:form', 'validate', 'change:type'])
 
 function updateForm(newForm) {
   emit('update:form', newForm)

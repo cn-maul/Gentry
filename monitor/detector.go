@@ -50,6 +50,11 @@ func NormalizeAndValidateSiteDefinition(site *database.Site) error {
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
 		return fmt.Errorf("URL 仅支持 http 或 https")
 	}
+	canonicalFetchConfig, err := CanonicalFetchConfig(site.FetchConfig, site.URL)
+	if err != nil {
+		return err
+	}
+	site.FetchConfig = canonicalFetchConfig
 	if strings.TrimSpace(site.Container) == "" {
 		return fmt.Errorf("容器选择器不能为空")
 	}

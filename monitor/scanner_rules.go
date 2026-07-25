@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -14,7 +17,152 @@ import (
 type scanSiteRule struct {
 	name       string
 	urlPattern string
+	matchesURL func(string) bool
 	build      func(doc *goquery.Document, settings *ScanSettings) []scanStrategyResult
+}
+
+const (
+	ScanRuleScopeExact   = "exact"
+	ScanRuleScopeRoute   = "route"
+	ScanRuleScopeSection = "section"
+	ScanRuleScopeGlobal  = "global"
+)
+
+type normalizedScanRuleURL struct {
+	source string
+	host   string
+	path   string
+	query  string
+}
+
+func normalizeScanRuleURL(raw string) (normalizedScanRuleURL, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return normalizedScanRuleURL{}, fmt.Errorf("URL 必须包含协议和主机")
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return normalizedScanRuleURL{}, fmt.Errorf("仅支持 HTTP 或 HTTPS URL")
+	}
+
+	hostname := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
+	if hostname == "" {
+		return normalizedScanRuleURL{}, fmt.Errorf("URL 主机无效")
+	}
+	port := parsed.Port()
+	if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
+		port = ""
+	}
+	matchHost := hostname
+	if port != "" {
+		matchHost = net.JoinHostPort(hostname, port)
+	}
+
+	matchPath := parsed.Path
+	if matchPath == "" {
+		matchPath = "/"
+	} else {
+		matchPath = path.Clean("/" + strings.TrimPrefix(matchPath, "/"))
+	}
+	matchQuery := parsed.Query().Encode()
+
+	parsed.Scheme = scheme
+	parsed.User = nil
+	parsed.Host = matchHost
+	if strings.Contains(hostname, ":") && port == "" {
+		parsed.Host = "[" + hostname + "]"
+	}
+	parsed.Path = matchPath
+	parsed.RawPath = ""
+	parsed.RawQuery = matchQuery
+	parsed.ForceQuery = false
+	parsed.Fragment = ""
+	parsed.RawFragment = ""
+
+	return normalizedScanRuleURL{
+		source: parsed.String(),
+		host:   matchHost,
+		path:   matchPath,
+		query:  matchQuery,
+	}, nil
+}
+
+// ApplyScanRuleScope derives matching fields from a trusted source URL. Route
+// scopes are path-segment prefixes and keep query constraints when present.
+func ApplyScanRuleScope(rule *database.ScanRuleTemplate, rawURL, scopeType string) error {
+	if scopeType == "" {
+		scopeType = ScanRuleScopeExact
+	}
+	if scopeType == ScanRuleScopeGlobal {
+		rule.ScopeType = ScanRuleScopeGlobal
+		rule.SourceURL = strings.TrimSpace(rawURL)
+		rule.MatchHost = ""
+		rule.MatchPath = ""
+		rule.MatchQuery = ""
+		return nil
+	}
+	if scopeType != ScanRuleScopeExact && scopeType != ScanRuleScopeRoute && scopeType != ScanRuleScopeSection {
+		return fmt.Errorf("不支持的规则适用范围 %q", scopeType)
+	}
+	normalized, err := normalizeScanRuleURL(rawURL)
+	if err != nil {
+		return err
+	}
+	if scopeType == ScanRuleScopeRoute && normalized.path == "/" && normalized.query == "" {
+		return fmt.Errorf("根路径不能创建路由规则，请选择当前页面或通用结构")
+	}
+	if scopeType == ScanRuleScopeSection {
+		sectionPath := path.Dir(normalized.path)
+		if sectionPath == "." || sectionPath == "/" {
+			return fmt.Errorf("当前页面没有可复用的同站目录")
+		}
+		normalized.path = sectionPath
+		normalized.query = ""
+	}
+	rule.SourceURL = normalized.source
+	rule.ScopeType = scopeType
+	rule.MatchHost = normalized.host
+	rule.MatchPath = normalized.path
+	rule.MatchQuery = normalized.query
+	return nil
+}
+
+// ApplyExactScanRuleScope is kept as a convenience for callers that only need
+// a page-isolated rule.
+func ApplyExactScanRuleScope(rule *database.ScanRuleTemplate, rawURL string) error {
+	return ApplyScanRuleScope(rule, rawURL, ScanRuleScopeExact)
+}
+
+// ScanRuleMatchesURL keeps legacy URLContains rules working while scoped rules
+// use normalized host, path and query equality.
+func ScanRuleMatchesURL(rule database.ScanRuleTemplate, rawURL string) bool {
+	if rule.ScopeType == ScanRuleScopeGlobal {
+		return true
+	}
+	if rule.ScopeType == ScanRuleScopeExact || rule.ScopeType == ScanRuleScopeRoute || rule.ScopeType == ScanRuleScopeSection {
+		normalized, err := normalizeScanRuleURL(rawURL)
+		if err != nil {
+			return false
+		}
+		if rule.MatchHost == "" || !strings.EqualFold(rule.MatchHost, normalized.host) {
+			return false
+		}
+		if rule.ScopeType == ScanRuleScopeExact {
+			return rule.MatchPath == normalized.path && rule.MatchQuery == normalized.query
+		}
+		basePath := strings.TrimSuffix(rule.MatchPath, "/")
+		pathMatches := normalized.path == rule.MatchPath
+		if rule.MatchPath != "/" {
+			pathMatches = pathMatches || strings.HasPrefix(normalized.path, basePath+"/")
+		}
+		queryMatches := rule.MatchQuery == "" || rule.MatchQuery == normalized.query
+		return pathMatches && queryMatches
+	}
+	if rule.ScopeType != "" {
+		return false
+	}
+	needle := strings.TrimSpace(rule.URLContains)
+	return needle != "" && strings.Contains(strings.ToLower(rawURL), strings.ToLower(needle))
 }
 
 type externalScanRuleFile struct {
@@ -31,7 +179,7 @@ type externalScanRule struct {
 	Diagnostics       []string `json:"diagnostics"`
 }
 
-var runtimeScanRules = builtInScanRules()
+var runtimeScanRules []scanSiteRule
 
 func matchCount(items []ExtractResult, keywords []string) int {
 	count := 0
@@ -98,30 +246,6 @@ func buildSelectorRuleStrategyResult(sourceLabel, name, urlPattern, containerSel
 	}
 }
 
-func thePaperExpressRule(doc *goquery.Document, settings *ScanSettings) []scanStrategyResult {
-	container := doc.Find("ul.ant-timeline").First()
-	if container.Length() == 0 {
-		return nil
-	}
-	var items []ExtractResult
-	container.ChildrenFiltered("li.ant-timeline-item").Each(func(_ int, li *goquery.Selection) {
-		text := strings.TrimSpace(li.Text())
-		if text == "" {
-			return
-		}
-		items = append(items, ExtractResult{"title": text})
-	})
-	return buildRuleStrategyResult("rule_thepaper_express", container, items, settings.Keywords, "命中内置站点规则", fmt.Sprintf("规则选择器 %s", "ul.ant-timeline > li.ant-timeline-item"))
-}
-
-func builtInScanRules() []scanSiteRule {
-	return []scanSiteRule{{
-		name:       "thepaper_express",
-		urlPattern: "thepaper.cn/expressNews",
-		build:      thePaperExpressRule,
-	}}
-}
-
 func buildUserTemplateRules() []scanSiteRule {
 	db := database.GetDB()
 	if db == nil {
@@ -138,7 +262,12 @@ func buildUserTemplateRules() []scanSiteRule {
 		if tpl.Description != "" {
 			diagnostics = append(diagnostics, tpl.Description)
 		}
-		result = append(result, buildSelectorRuleStrategyResult("命中用户扫描规则模板", "template_"+tpl.Name, tpl.URLContains, tpl.Container, tpl.Item, max(70, tpl.Priority), diagnostics, tpl.Fields))
+		rule := buildSelectorRuleStrategyResult("命中用户扫描规则模板", "template_"+tpl.Name, tpl.URLContains, tpl.Container, tpl.Item, max(70, tpl.Priority), diagnostics, tpl.Fields)
+		template := tpl
+		rule.matchesURL = func(rawURL string) bool {
+			return ScanRuleMatchesURL(template, rawURL)
+		}
+		result = append(result, rule)
 	}
 	return result
 }
@@ -149,12 +278,12 @@ func loadExternalScanRules(path string) []scanSiteRule {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		log.Printf("[ScannerRules] 读取外部规则失败，回退内置规则: %v", err)
+		log.Printf("[ScannerRules] 读取外部规则失败: %v", err)
 		return nil
 	}
 	var file externalScanRuleFile
 	if err := json.Unmarshal(data, &file); err != nil {
-		log.Printf("[ScannerRules] 解析外部规则失败，回退内置规则: %v", err)
+		log.Printf("[ScannerRules] 解析外部规则失败: %v", err)
 		return nil
 	}
 	var rules []scanSiteRule
@@ -169,36 +298,9 @@ func loadExternalScanRules(path string) []scanSiteRule {
 	return rules
 }
 
-func mergeScanRules(defaults, externals []scanSiteRule) []scanSiteRule {
-	merged := make(map[string]scanSiteRule)
-	order := []string{}
-	for _, rule := range defaults {
-		merged[rule.name] = rule
-		order = append(order, rule.name)
-	}
-	for _, rule := range externals {
-		if _, exists := merged[rule.name]; !exists {
-			order = append(order, rule.name)
-		}
-		merged[rule.name] = rule
-	}
-	result := make([]scanSiteRule, 0, len(order))
-	seen := map[string]bool{}
-	for _, name := range order {
-		if seen[name] {
-			continue
-		}
-		result = append(result, merged[name])
-		seen[name] = true
-	}
-	return result
-}
-
 func InitScanRules(externalPath string) {
-	defaults := builtInScanRules()
-	externals := loadExternalScanRules(externalPath)
-	runtimeScanRules = mergeScanRules(defaults, externals)
-	log.Printf("[ScannerRules] 已加载 %d 条内置/外部扫描规则", len(runtimeScanRules))
+	runtimeScanRules = loadExternalScanRules(externalPath)
+	log.Printf("[ScannerRules] 已加载 %d 条外部扫描规则", len(runtimeScanRules))
 }
 
 func CurrentScanRules() []scanSiteRule {

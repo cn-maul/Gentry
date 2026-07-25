@@ -326,12 +326,7 @@ func (m *Monitor) CheckForUpdates() ([]ExtractResult, error) {
 }
 
 func (m *Monitor) checkForUpdatesContext(ctx context.Context, site database.Site) ([]ExtractResult, error) {
-	html, err := m.fetcher.FetchContext(ctx, site.URL)
-	if err != nil {
-		return nil, fmt.Errorf("fetch failed: %w", err)
-	}
-
-	current, err := m.extractor.Extract(html)
+	current, err := extractSiteResults(ctx, &site, m.fetcher, m.extractor)
 	if err != nil {
 		return nil, fmt.Errorf("extraction failed: %w", err)
 	}
@@ -507,6 +502,9 @@ func (m *Monitor) saveResults(results []ExtractResult) error {
 	if len(results) == 0 {
 		return nil
 	}
+	// 同一次抓取的记录使用相同时间戳。这样历史列表可以先按抓取批次倒序，
+	// 再按 ID 正序保留网页本身从上到下的顺序（通常是新内容在前）。
+	batchCreatedAt := database.Now()
 
 	// 一次性加载已有的 (title, url) 对，避免 N+1 查询
 	type keyPair struct {
@@ -547,10 +545,11 @@ func (m *Monitor) saveResults(results []ExtractResult) error {
 			continue
 		}
 		record := &database.UpdateRecord{
-			SiteID:  m.site.ID,
-			Title:   title,
-			URL:     urlStr,
-			Content: string(data),
+			CreatedAt: batchCreatedAt,
+			SiteID:    m.site.ID,
+			Title:     title,
+			URL:       urlStr,
+			Content:   string(data),
 		}
 		if err := database.GetDB().Create(record).Error; err != nil {
 			log.Printf("[%s] 创建更新记录失败: %v", m.site.Name, err)

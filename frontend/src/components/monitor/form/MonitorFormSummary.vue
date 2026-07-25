@@ -28,11 +28,11 @@
         <span class="summary-value">{{ formatInterval(form.basic.interval) }}</span>
       </div>
       <div class="summary-row">
-        <span class="summary-label">容器</span>
+        <span class="summary-label">{{ form.monitorType === 'field_transition' ? '价格来源' : '内容区域' }}</span>
         <code class="summary-code">{{ form.extraction.containerSelector || '—' }}</code>
       </div>
       <div class="summary-row" v-if="form.extraction.itemSelector">
-        <span class="summary-label">列表项</span>
+        <span class="summary-label">{{ form.monitorType === 'field_transition' ? '商品条目' : '列表项' }}</span>
         <code class="summary-code">{{ form.extraction.itemSelector }}</code>
       </div>
       <div class="summary-row">

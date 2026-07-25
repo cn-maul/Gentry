@@ -128,3 +128,62 @@ test('target price changes are semantic changes', () => {
   changed.rule.transition.targetPrice = '189'
   assert.equal(hasSemanticChange(original, changed), true)
 })
+
+test('JSON API price source round-trips and participates in validation', () => {
+  const form = validPriceForm()
+  form.extraction.sourceMode = 'api_json'
+  form.extraction.sourceUrl = 'https://shop.example/api/skus?id=31'
+  form.extraction.itemsPath = 'data'
+  form.extraction.filterPath = 'is_selling'
+  form.extraction.filterEquals = 'true'
+  form.extraction.sourceHeaders = {
+    Accept: 'application/json',
+    Referer: 'https://shop.example/products/31',
+    'X-Requested-With': 'XMLHttpRequest',
+  }
+  form.extraction.sourceUrl = 'https://shop.example/api/skus?id={{goods_id}}'
+  form.extraction.sourceHeaders.Referer = '{{page_url}}'
+  form.extraction.sourceVariables = {
+    goods_id: { source: 'html', selector: '#goods_id', attr: 'value' },
+  }
+  form.extraction.containerSelector = 'data'
+  form.extraction.itemSelector = '*'
+  form.extraction.fields = [
+    { name: 'title', selector: 'spec_array.*.value', type: 'text', attr: '', transform: '' },
+    { name: 'sku', selector: 'products_no', type: 'text', attr: '', transform: '' },
+    { name: 'price', selector: 'sell_price', type: 'text', attr: '', transform: '' },
+  ]
+  form.rule.pageMode = 'list'
+  form.rule.identity = { mode: 'field', field: 'sku' }
+
+  assert.equal(validateForm(form), null)
+  const payload = toMonitorRequest(form)
+  assert.deepEqual(payload.fetch_config, {
+    mode: 'api_json',
+    url: 'https://shop.example/api/skus?id={{goods_id}}',
+    items_path: 'data',
+    filter_path: 'is_selling',
+    filter_equals: 'true',
+    headers: {
+      Accept: 'application/json',
+      Referer: '{{page_url}}',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    variables: {
+      goods_id: { source: 'html', selector: '#goods_id', attr: 'value' },
+    },
+  })
+
+  const restored = fromMonitorResponse({
+    ...payload,
+    fetch_config: JSON.stringify(payload.fetch_config),
+    strategy_config: JSON.stringify(payload.strategy_config),
+    field_data_types: JSON.stringify(payload.field_data_types),
+  })
+  assert.equal(restored.extraction.sourceMode, 'api_json')
+  assert.equal(restored.extraction.sourceUrl, payload.fetch_config.url)
+  assert.equal(restored.extraction.itemsPath, 'data')
+  assert.deepEqual(restored.extraction.sourceHeaders, payload.fetch_config.headers)
+  assert.deepEqual(restored.extraction.sourceVariables, payload.fetch_config.variables)
+  assert.equal(restored.rule.identity.field, 'sku')
+})

@@ -86,11 +86,17 @@ type ScanRuleTemplate struct {
 	UpdatedAt   time.Time
 	Name        string          `gorm:"size:100;uniqueIndex"`
 	URLContains string          `gorm:"size:255;index"`
+	SourceURL   string          `gorm:"size:1024"`
+	ScopeType   string          `gorm:"size:20;index"`
+	MatchHost   string          `gorm:"size:255;index"`
+	MatchPath   string          `gorm:"size:512"`
+	MatchQuery  string          `gorm:"size:1024"`
 	Container   string          `gorm:"size:255"`
 	Item        string          `gorm:"size:255"`
 	Priority    int             `gorm:"default:50"`
 	Enabled     bool            `gorm:"default:true;index"`
 	Description string          `gorm:"size:500"`
+	FetchConfig string          `gorm:"type:text"`
 	Fields      []ScanRuleField `gorm:"foreignKey:RuleID"`
 }
 

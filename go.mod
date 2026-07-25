@@ -3,6 +3,7 @@ module github.com/cn-maul/Gentry
 go 1.26
 
 require (
+	github.com/andybalholm/cascadia v1.3.3
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/easychen/serverchan-sdk-golang v1.0.0
 	github.com/gin-contrib/cors v1.7.6
@@ -12,7 +13,6 @@ require (
 )
 
 require (
-	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/bytedance/sonic v1.13.3 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect

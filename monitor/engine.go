@@ -128,12 +128,7 @@ func (e *Engine) CheckOnce(ctx context.Context) ([]ChangeEvent, bool, error) {
 
 func (e *Engine) observe(ctx context.Context) ([]Observation, error) {
 	site := e.site
-	html, err := e.fetcher.FetchContext(ctx, site.URL)
-	if err != nil {
-		return nil, fmt.Errorf("fetch failed: %w", err)
-	}
-
-	rawResults, err := e.extractor.Extract(html)
+	rawResults, err := extractSiteResults(ctx, site, e.fetcher, e.extractor)
 	if err != nil {
 		return nil, fmt.Errorf("extraction failed: %w", err)
 	}

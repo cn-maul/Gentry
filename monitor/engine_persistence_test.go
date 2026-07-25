@@ -55,6 +55,51 @@ func createPriceMonitorSite(t *testing.T) *database.Site {
 	return site
 }
 
+func TestSaveResultsKeepsNewestPageItemFirstWithinEachFetch(t *testing.T) {
+	setupMonitorPersistenceDB(t)
+
+	site := &database.Site{Name: "ordered-updates", URL: "https://example.com"}
+	if err := database.GetDB().Create(site).Error; err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+	monitor := &Monitor{site: site}
+
+	firstFetch := []ExtractResult{
+		{"title": "newest", "url": "https://example.com/3"},
+		{"title": "middle", "url": "https://example.com/2"},
+		{"title": "oldest", "url": "https://example.com/1"},
+	}
+	if err := monitor.saveResults(firstFetch); err != nil {
+		t.Fatalf("save first fetch: %v", err)
+	}
+
+	time.Sleep(time.Millisecond)
+	if err := monitor.saveResults([]ExtractResult{
+		{"title": "latest fetch", "url": "https://example.com/4"},
+	}); err != nil {
+		t.Fatalf("save second fetch: %v", err)
+	}
+
+	var records []database.UpdateRecord
+	if err := database.GetDB().Where("site_id = ?", site.ID).
+		Order("created_at desc, id asc").Find(&records).Error; err != nil {
+		t.Fatalf("load records: %v", err)
+	}
+
+	want := []string{"latest fetch", "newest", "middle", "oldest"}
+	if len(records) != len(want) {
+		t.Fatalf("record count = %d, want %d", len(records), len(want))
+	}
+	for i, title := range want {
+		if records[i].Title != title {
+			t.Fatalf("record %d title = %q, want %q", i, records[i].Title, title)
+		}
+	}
+	if !records[1].CreatedAt.Equal(records[2].CreatedAt) || !records[2].CreatedAt.Equal(records[3].CreatedAt) {
+		t.Fatal("records from one fetch must share the same created_at")
+	}
+}
+
 func TestValidateExtractionReturnsPriceSamples(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`<html><body><h1>测试商品</h1><span class="price">¥123.45</span></body></html>`))

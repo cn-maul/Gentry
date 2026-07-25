@@ -48,9 +48,17 @@ func (e *Extractor) Extract(html string) ([]ExtractResult, error) {
 
 	var results []ExtractResult
 
-	items := doc.Find(e.containerSelector)
+	containers := doc.Find(e.containerSelector)
+	containers = narrowLegacyBroadContainers(containers, e.containerSelector, e.itemSelector)
+	items := containers
+	recoveredLegacyAnchors := false
 	if strings.TrimSpace(e.itemSelector) != "" {
-		items = items.Find(e.itemSelector)
+		if recovered := recoverLegacyMetadataItemSelector(containers, e.itemSelector); recovered != nil {
+			items = recovered
+			recoveredLegacyAnchors = true
+		} else {
+			items = items.Find(e.itemSelector)
+		}
 	}
 	items.Each(func(_ int, s *goquery.Selection) {
 		result := make(ExtractResult)
@@ -59,12 +67,132 @@ func (e *Extractor) Extract(html string) ([]ExtractResult, error) {
 				result[field.Name] = value
 			}
 		}
+		if recoveredLegacyAnchors {
+			if _, exists := result["url"]; !exists {
+				if href, exists := s.Attr("href"); exists && strings.TrimSpace(href) != "" {
+					result["url"] = href
+				}
+			}
+		}
 		if len(result) > 0 {
 			results = append(results, result)
 		}
 	})
 
 	return results, nil
+}
+
+// recoverLegacyMetadataItemSelector 兼容旧扫描器把公告旁边的元数据 ul
+// 误识别成条目，而真正公告是容器直接子级链接的配置。
+func recoverLegacyMetadataItemSelector(containers *goquery.Selection, itemSelector string) *goquery.Selection {
+	selector := strings.ToLower(strings.TrimSpace(itemSelector))
+	if !strings.HasPrefix(selector, "ul") && !strings.HasPrefix(selector, "ol") {
+		return nil
+	}
+	metadataItems := containers.Find(itemSelector)
+	if metadataItems.Length() < 2 || metadataItems.Find("a[href]").Length() > 0 {
+		return nil
+	}
+	directAnchors := containers.ChildrenFiltered("a[href]")
+	if directAnchors.Length() < 2 {
+		return nil
+	}
+	meaningful := 0
+	detailLinks := 0
+	directAnchors.Each(func(_ int, anchor *goquery.Selection) {
+		if strings.TrimSpace(anchor.Text()) == "" {
+			return
+		}
+		meaningful++
+		if href, exists := anchor.Attr("href"); exists && isLikelyDetailHref(href) {
+			detailLinks++
+		}
+	})
+	if meaningful < 2 || detailLinks*2 < meaningful {
+		return nil
+	}
+	return directAnchors
+}
+
+// narrowLegacyBroadContainers 修复旧版扫描器保存的 ul/ol/table 等过宽配置。
+// 只有最佳候选明显优于其他候选时才收窄，避免影响确实需要合并多个列表的配置。
+func narrowLegacyBroadContainers(containers *goquery.Selection, containerSelector, itemSelector string) *goquery.Selection {
+	selector := strings.ToLower(strings.TrimSpace(containerSelector))
+	if containers.Length() <= 1 || strings.TrimSpace(itemSelector) == "" {
+		return containers
+	}
+	switch selector {
+	case "ul", "ol", "table", "tbody", "dl":
+	default:
+		return containers
+	}
+
+	var best *goquery.Selection
+	bestScore := -1 << 30
+	secondScore := -1 << 30
+	containers.Each(func(_ int, container *goquery.Selection) {
+		score := contentContainerScore(container, itemSelector)
+		if score > bestScore {
+			secondScore = bestScore
+			bestScore = score
+			best = container
+		} else if score > secondScore {
+			secondScore = score
+		}
+	})
+
+	if best == nil || bestScore-secondScore < 25 {
+		return containers
+	}
+	return best
+}
+
+func contentContainerScore(container *goquery.Selection, itemSelector string) int {
+	items := container.Find(itemSelector)
+	if items.Length() == 0 {
+		return -1000
+	}
+
+	score := items.Length()
+	if isLikelyNoiseRegion(container) {
+		score -= 200
+	}
+	items.Each(func(_ int, item *goquery.Selection) {
+		text := strings.TrimSpace(item.Text())
+		if len([]rune(text)) >= 8 {
+			score += 3
+		}
+		if isDateLike(text) {
+			score += 8
+		}
+		item.Find("a[href]").EachWithBreak(func(_ int, link *goquery.Selection) bool {
+			href, _ := link.Attr("href")
+			if isLikelyDetailHref(href) {
+				score += 10
+				return false
+			}
+			return true
+		})
+	})
+	return score
+}
+
+func isLikelyNoiseRegion(container *goquery.Selection) bool {
+	if isLikelyNoiseContainer(container) {
+		return true
+	}
+	noise := false
+	container.Parents().EachWithBreak(func(index int, parent *goquery.Selection) bool {
+		if index >= 4 {
+			return false
+		}
+		if isLikelyNoiseContainer(parent) {
+			noise = true
+			return false
+		}
+		return true
+	})
+	return noise
 }
 
 func (e *Extractor) extractField(s *goquery.Selection, field FieldConfig) interface{} {
