@@ -56,7 +56,10 @@
     <div class="form-error" v-if="scanError">{{ scanError }}</div>
 
     <div v-if="modelValue.containerSelector" class="selection-confirmed">
-      已选定网页内容区域
+      <div class="confirmed-content">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span>已识别内容区域，系统将监控新出现的内容</span>
+      </div>
     </div>
     </template>
 
@@ -366,7 +369,7 @@ function removeField(index) {
 .advanced-toggle {
   display: inline-flex; align-items: center; gap: 0.35rem;
   cursor: pointer; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);
-  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
   user-select: none; transition: var(--transition);
 }
 .advanced-toggle:hover { color: var(--text); }
@@ -381,7 +384,7 @@ function removeField(index) {
 
 .fields-section { margin-top: 0.5rem; }
 .fields-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
-.fields-title { font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; }
+.fields-title { font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); }
 .fields-list { display: flex; flex-direction: column; gap: 0.5rem; }
 .field-card { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.75rem; background: var(--bg-surface); border-radius: var(--radius-lg); }
 .field-grid { flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 0.5rem; }

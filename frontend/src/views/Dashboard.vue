@@ -27,10 +27,16 @@
 
     <div class="empty" v-else-if="monitors.length === 0">
       <div class="empty-icon">📡</div>
-      <p>还没有监控器</p>
-      <p style="color: var(--text-muted); font-size: 0.8125rem; margin-top: 0.25rem;">
-        点击上方按钮添加第一个监控器
-      </p>
+      <p class="empty-title">还没有监控任务</p>
+      <p class="empty-desc">粘贴一个网页地址，系统会自动识别需要关注的内容</p>
+      <router-link to="/add" class="btn btn-primary" style="margin-top: 1.25rem;">创建第一个监控</router-link>
+      <div class="empty-hints">
+        <span>支持公告更新</span>
+        <span class="hint-dot" />
+        <span>商品降价提醒</span>
+        <span class="hint-dot" />
+        <span>目标价格提醒</span>
+      </div>
     </div>
 
     <!-- Delete confirm modal -->
@@ -137,7 +143,7 @@ async function handleStart(name) {
 async function handleStop(name) {
   try {
     await stopMonitor(name)
-    showError(`「${name}」已暂停`)
+    showSuccess(`「${name}」已暂停`)
     await loadData()
   } catch (e) {
     showError('暂停失败: ' + (e.response?.data?.message || e.message))
@@ -196,5 +202,35 @@ function handleView(name) {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+.empty-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 0.5rem;
+}
+
+.empty-desc {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+.empty-hints {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.hint-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
 }
 </style>

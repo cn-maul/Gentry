@@ -3,7 +3,7 @@
     <template v-if="!advanced">
       <div class="section-header">
         <h2>{{ monitorType === 'field_transition' ? '要监控哪个商品？' : '要监控哪个网页？' }}</h2>
-        <p class="section-desc">粘贴网址即可，名称可以留空。</p>
+        <p class="section-desc">粘贴网址，系统会自动识别需要关注的内容。名称可留空。</p>
       </div>
       <div class="form-group">
         <label>{{ monitorType === 'field_transition' ? '商品网址' : '网页网址' }}</label>

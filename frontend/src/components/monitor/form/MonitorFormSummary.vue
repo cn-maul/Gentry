@@ -147,8 +147,6 @@ function formatInterval(s) {
   font-size: 0.6875rem;
   font-weight: 700;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
   min-width: 70px;
   flex-shrink: 0;
 }

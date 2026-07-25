@@ -1,5 +1,22 @@
 <template>
   <div class="monitor-form">
+    <div class="step-indicator" v-if="showTypeSelector">
+      <div class="step" :class="{ active: currentStep === 1, done: currentStep > 1 }">
+        <span class="step-num">1</span>
+        <span class="step-text">填写网址</span>
+      </div>
+      <div class="step-line" :class="{ done: currentStep > 1 }" />
+      <div class="step" :class="{ active: currentStep === 2, done: currentStep > 2 }">
+        <span class="step-num">2</span>
+        <span class="step-text">确认内容</span>
+      </div>
+      <div class="step-line" :class="{ done: currentStep > 2 }" />
+      <div class="step" :class="{ active: currentStep === 3 }">
+        <span class="step-num">3</span>
+        <span class="step-text">创建监控</span>
+      </div>
+    </div>
+
     <MonitorTypeSelector :modelValue="form.monitorType" @update:modelValue="$emit('change:type', $event)" v-if="showTypeSelector" />
 
     <BasicMonitorForm v-model="form.basic" :monitorType="form.monitorType" />
@@ -69,6 +86,17 @@
       </label>
     </div>
 
+    <div class="notification-summary" :class="{ 'not-configured': !hasNotification }">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <template v-if="hasNotification">
+        <span>通知已配置，变化时将发送提醒</span>
+      </template>
+      <template v-else>
+        <span>未配置通知，仅记录变化不发送提醒</span>
+        <router-link to="/push" class="btn btn-ghost btn-sm">添加通知方式</router-link>
+      </template>
+    </div>
+
     <div class="form-error" v-if="error">{{ error }}</div>
 
     <div class="baseline-warning" v-if="showBaselineWarning">
@@ -84,6 +112,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import MonitorTypeSelector from './MonitorTypeSelector.vue'
 import BasicMonitorForm from './BasicMonitorForm.vue'
 import ExtractionEditor from './ExtractionEditor.vue'
@@ -105,6 +134,17 @@ const props = defineProps({
 
 const emit = defineEmits(['update:form', 'validate', 'change:type'])
 
+const hasNotification = computed(() => props.form.notification.accountIds.length > 0)
+
+const currentStep = computed(() => {
+  if (!props.form.basic.url) return 1
+  const hasContent = props.form.monitorType === 'presence'
+    ? !!props.form.extraction.containerSelector
+    : (props.form.extraction.containerSelector && props.form.extraction.fields.some(f => f.name === 'price'))
+  if (!hasContent) return 2
+  return 3
+})
+
 function updateForm(newForm) {
   emit('update:form', newForm)
 }
@@ -115,6 +155,73 @@ function updateForm(newForm) {
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+.step-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+
+.step.active .step-num {
+  background: var(--green);
+  color: #000;
+}
+
+.step.done .step-num {
+  background: var(--green);
+  color: #000;
+}
+
+.step-text {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.step.active .step-text {
+  color: var(--text);
+}
+
+.step.done .step-text {
+  color: var(--text-secondary);
+}
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--bg-elevated);
+  margin: 0 0.5rem;
+  border-radius: 1px;
+  transition: var(--transition);
+}
+
+.step-line.done {
+  background: var(--green);
 }
 
 .advanced-settings {
@@ -189,6 +296,32 @@ function updateForm(newForm) {
   justify-content: flex-end;
   align-items: center;
   margin-top: 0.5rem;
+}
+
+.notification-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--success-bg);
+  color: var(--success);
+  border-radius: var(--radius-lg);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.notification-summary svg { flex-shrink: 0; }
+
+.notification-summary.not-configured {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.notification-summary .btn {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 @media (max-width: 640px) {

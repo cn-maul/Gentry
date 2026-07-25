@@ -54,7 +54,7 @@
           <p class="section-desc">每个账户独立配置，可在监控器详情中选用</p>
         </div>
 
-        <div v-for="acc in accounts" :key="acc.id" class="account-card">
+        <div class="account-card" v-for="acc in accounts" :key="acc.id">
           <div class="account-header">
             <div class="account-info">
               <span class="account-name">{{ acc.name }}</span>
@@ -69,26 +69,9 @@
               </button>
             </div>
           </div>
-
-          <div class="account-config">
-            <template v-if="acc.service === 'pushplus'">
-              <span class="config-line" v-if="getConfig(acc).token">Token: {{ maskToken(getConfig(acc).token) }}</span>
-              <span class="config-line" v-if="getConfig(acc).channel">Channel: {{ getConfig(acc).channel }}</span>
-              <span class="config-line" v-if="getConfig(acc).template">Template: {{ getConfig(acc).template }}</span>
-            </template>
-            <template v-else-if="acc.service === 'webhook'">
-              <span class="config-line" v-if="getConfig(acc).url">URL: {{ getConfig(acc).url }}</span>
-            </template>
-            <template v-else-if="acc.service === 'serverchan'">
-              <span class="config-line" v-if="getConfig(acc).sendkey">SendKey: {{ maskToken(getConfig(acc).sendkey) }}</span>
-              <span class="config-line" v-if="getConfig(acc).channel">Channel: {{ getConfig(acc).channel }}</span>
-            </template>
-            <template v-else-if="acc.service === 'bark'">
-              <span class="config-line" v-if="getConfig(acc).key">Key: {{ maskToken(getConfig(acc).key) }}</span>
-              <span class="config-line" v-if="getConfig(acc).server">Server: {{ getConfig(acc).server }}</span>
-              <span class="config-line" v-if="getConfig(acc).group">Group: {{ getConfig(acc).group }}</span>
-              <span class="config-line" v-if="getConfig(acc).sound">Sound: {{ getConfig(acc).sound }}</span>
-            </template>
+          <div class="account-status">
+            <span class="status-dot-ok" />
+            <span class="status-text">配置正常</span>
           </div>
         </div>
       </div>
@@ -425,7 +408,22 @@ async function handleSaveAccount() {
   margin-top: 0.5rem;
 }
 
-.config-line {
+.account-status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.status-dot-ok {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+}
+
+.status-text {
   font-size: 0.75rem;
   color: var(--text-muted);
 }

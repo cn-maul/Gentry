@@ -452,7 +452,7 @@ function candidateKey(candidate, index) {
 .recognized-overflow { padding-top: 0.65rem; color: var(--text-muted); font-size: 0.75rem; }
 .rule-match-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 0; border-top: 1px solid var(--border-light); border-bottom: 1px solid var(--border-light); }
 .match-target { min-width: 0; display: grid; gap: 0.2rem; }
-.match-label { color: var(--text-muted); font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+.match-label { color: var(--text-muted); font-size: 0.6875rem; font-weight: 700; }
 .match-target code { overflow: hidden; color: var(--text-secondary); font-size: 0.75rem; text-overflow: ellipsis; white-space: nowrap; }
 .candidate-list { border-bottom: 1px solid var(--border-light); }
 .candidate-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1rem; padding: 0.85rem 0; border-bottom: 1px solid var(--border-light); }

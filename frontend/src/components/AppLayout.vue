@@ -18,7 +18,7 @@
       <nav class="sidebar-nav">
         <router-link to="/" class="nav-item" :class="{ active: $route.path === '/' }">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-          <span>仪表盘</span>
+          <span>监控列表</span>
         </router-link>
         <router-link to="/add" class="nav-item" :class="{ active: $route.path === '/add' }">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
@@ -26,11 +26,11 @@
         </router-link>
         <router-link to="/push" class="nav-item" :class="{ active: $route.path === '/push' }">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-          <span>推送管理</span>
+          <span>通知方式</span>
         </router-link>
         <router-link to="/scan-rules" class="nav-item" :class="{ active: $route.path === '/scan-rules' }">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          <span>扫描规则</span>
+          <span>高级规则</span>
         </router-link>
         <router-link to="/settings" class="nav-item" :class="{ active: $route.path === '/settings' }">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -49,12 +49,12 @@
     </aside>
 
     <!-- ═══ Main Content ═══ -->
-    <main class="main-content">
+    <main class="main-content" :class="{ 'has-right-sidebar': showRightSidebar }">
       <slot />
     </main>
 
     <!-- ═══ Right Sidebar: Stats ═══ -->
-    <aside class="sidebar-right">
+    <aside class="sidebar-right" v-if="showRightSidebar">
       <div class="stats-panel">
         <div class="panel-header">
           <h3>系统概览</h3>
@@ -124,8 +124,12 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { fetchStats } from '../api/monitors'
 import UpdatePanel from './UpdatePanel.vue'
+
+const route = useRoute()
+const showRightSidebar = computed(() => route.name === 'dashboard')
 
 const STORAGE_KEY = 'gentry_theme'
 const isDark = ref(false)
@@ -300,11 +304,14 @@ onUnmounted(() => {
 .main-content {
   flex: 1;
   margin-left: 200px;
-  margin-right: 260px;
   padding: 2rem;
   min-width: 0;
   max-width: calc(1120px + 4rem);
   background: var(--bg-base);
+}
+
+.main-content.has-right-sidebar {
+  margin-right: 260px;
 }
 
 /* ═══ Right Sidebar ═══ */
@@ -339,8 +346,6 @@ onUnmounted(() => {
 .panel-header h3 {
   font-size: 0.6875rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
   color: var(--text-muted);
 }
 
@@ -436,8 +441,6 @@ onUnmounted(() => {
 .section-title {
   font-size: 0.625rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
   color: var(--text-muted);
   margin-bottom: 0.5rem;
 }
@@ -512,7 +515,7 @@ onUnmounted(() => {
 /* ═══ Responsive ═══ */
 @media (max-width: 1100px) {
   .sidebar-right { display: none; }
-  .main-content { margin-right: 0; max-width: none; }
+  .main-content.has-right-sidebar { margin-right: 0; }
 }
 
 @media (max-width: 768px) {
@@ -562,12 +565,15 @@ onUnmounted(() => {
 
   .nav-item.active svg { opacity: 1; }
 
+  .nav-item:nth-child(n+5) { display: none; }
+
   .main-content {
     margin-left: 0;
-    margin-right: 0;
     padding: 1rem;
     padding-bottom: 72px;
     max-width: none;
   }
+
+  .main-content.has-right-sidebar { margin-right: 0; }
 }
 </style>

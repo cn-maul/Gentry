@@ -32,7 +32,7 @@
         </template>
         <template #actions>
           <button class="btn btn-primary" :disabled="submitting" @click="handleSubmit">
-            {{ submitting ? '提交中...' : (isEdit ? '保存修改' : '创建并启动') }}
+            {{ submitting ? '提交中...' : (isEdit ? '保存修改' : (form.basic.isActive ? '创建并启动' : '仅创建')) }}
           </button>
         </template>
       </MonitorForm>

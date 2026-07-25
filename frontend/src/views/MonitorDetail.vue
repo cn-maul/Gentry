@@ -11,7 +11,7 @@
           <svg v-else viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M8 5v14l11-7z"/></svg>
         </button>
         <router-link :to="`/edit/${encodeURIComponent(monitor.name)}`" class="btn btn-ghost btn-sm">编辑</router-link>
-        <button class="btn btn-danger btn-sm" @click="confirmDelete">删除</button>
+        <button class="btn btn-ghost btn-sm" style="color: var(--error);" @click="confirmDelete">删除</button>
       </div>
     </div>
 
@@ -50,9 +50,24 @@
       </div>
       <div class="detail-panel settings-section">
         <div class="detail-left">
-          <div class="status-row">
-            <StatusBadge :status="monitor.is_running ? 'running' : (monitor.last_error ? 'error' : 'stopped')" />
-            <span class="interval-badge">{{ formatInterval(monitor.check_interval) }}</span>
+          <div class="status-summary" :class="{ 'status-error': monitor.last_error }">
+            <div class="status-row">
+              <StatusBadge :status="monitor.is_running ? 'running' : (monitor.last_error ? 'error' : 'stopped')" />
+              <span class="interval-badge">{{ formatInterval(monitor.check_interval) }}</span>
+            </div>
+            <div class="status-description">
+              <template v-if="monitor.last_error">
+                <span class="desc-error">检查失败</span>
+                <span class="desc-detail">{{ monitor.last_error }}</span>
+              </template>
+              <template v-else-if="monitor.is_running">
+                <span class="desc-ok">运行正常</span>
+                <span class="desc-detail" v-if="monitor.last_check">{{ formatTime(monitor.last_check) }}完成检查</span>
+              </template>
+              <template v-else>
+                <span class="desc-paused">已暂停</span>
+              </template>
+            </div>
           </div>
           <div class="status-grid">
             <div class="status-item">
@@ -68,20 +83,16 @@
               <span class="status-value">{{ monitor.last_check ? formatTime(monitor.last_check) : '—' }}</span>
             </div>
             <div class="status-item">
-              <span class="status-label">检查耗时</span>
-              <span class="status-value">{{ monitor.last_duration ? formatDuration(monitor.last_duration) : '—' }}</span>
-            </div>
-            <div class="status-item">
               <span class="status-label">更新次数</span>
               <span class="status-value">{{ monitor.updates_count || 0 }}</span>
-            </div>
-            <div class="status-item" v-if="monitor.last_error">
-              <span class="status-label">错误信息</span>
-              <span class="status-value error-text">{{ monitor.last_error }}</span>
             </div>
             <div class="status-item">
               <span class="status-label">下次检查</span>
               <span class="status-value">{{ monitor.next_check ? formatTime(monitor.next_check) : '—' }}</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">检查耗时</span>
+              <span class="status-value">{{ monitor.last_duration ? formatDuration(monitor.last_duration) : '—' }}</span>
             </div>
             <div class="status-item" v-if="monitor.strategy_type">
               <span class="status-label">监控类型</span>
@@ -94,7 +105,7 @@
           </div>
           <div class="status-actions" v-if="monitor.strategy_type === 'field_transition'">
             <button class="btn btn-sm btn-ghost" @click="handleResetBaseline" :disabled="actionLoading">
-              重新建立基线
+              重新记录当前价格
             </button>
             <button class="btn btn-sm btn-ghost" @click="handleManualCheck" :disabled="actionLoading">
               立即检查
@@ -429,7 +440,7 @@ function serviceLabel(s) {
 }
 
 async function handleResetBaseline() {
-  if (!confirm('确定要重新建立基线吗？这将清除当前比较基准，但不会删除历史事件。')) return
+  if (!confirm('确定要重新记录当前价格吗？这会将当前价格作为新的比较起点，但不会删除历史价格记录。')) return
   actionLoading.value = true
   try {
     await resetBaseline(route.params.name)
@@ -477,11 +488,34 @@ async function handleManualCheck() {
 </script>
 
 <style scoped>
-.status-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+.status-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
 .interval-badge { font-size: 0.75rem; color: var(--text-muted); background: var(--bg-elevated); padding: 0.15rem 0.5rem; border-radius: var(--radius-pill); }
+
+.status-summary {
+  padding: 1rem;
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  margin-bottom: 1rem;
+}
+
+.status-summary.status-error {
+  background: var(--error-bg);
+}
+
+.status-description {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.desc-error { font-size: 0.9375rem; font-weight: 700; color: var(--error); }
+.desc-ok { font-size: 0.9375rem; font-weight: 700; color: var(--success); }
+.desc-paused { font-size: 0.9375rem; font-weight: 700; color: var(--text-muted); }
+.desc-detail { font-size: 0.8125rem; color: var(--text-secondary); }
+
 .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 .status-item { display: flex; flex-direction: column; gap: 0.1rem; }
-.status-label { font-size: 0.6875rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.status-label { font-size: 0.6875rem; font-weight: 700; color: var(--text-muted); }
 .status-value { font-size: 0.875rem; color: var(--text); word-break: break-all; }
 .error-text { color: var(--error); }
 .status-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
@@ -551,7 +585,7 @@ async function handleManualCheck() {
 /* 快照表格 */
 .snapshots-table { display: flex; flex-direction: column; gap: 0.2rem; }
 .snapshot-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.4rem 0.75rem; background: var(--bg-card); border-radius: var(--radius-lg); font-size: 0.8125rem; }
-.snapshot-header { background: transparent; font-weight: 700; font-size: 0.6875rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.snapshot-header { background: transparent; font-weight: 700; font-size: 0.6875rem; color: var(--text-muted); }
 .snap-col { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snap-key { flex: 2; }
 .snapshot-identity { display: grid; gap: 0.1rem; }

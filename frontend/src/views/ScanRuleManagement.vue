@@ -5,7 +5,7 @@
 
     <header class="page-header">
       <div>
-        <h1>扫描规则</h1>
+        <h1>高级规则</h1>
         <p>添加和管理可复用的网页与价格提取规则</p>
       </div>
       <div class="header-actions">
@@ -109,6 +109,10 @@
 
       <template v-else>
         <div class="price-builder">
+          <div class="price-builder-hint">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>此页面适合熟悉 CSS 选择器或 JSON API 的用户。普通监控请使用「新增监控」页面的自动识别功能。</span>
+          </div>
           <div class="price-grid primary-fields">
             <div class="form-group">
               <label for="price-rule-name">规则名称</label>
@@ -682,7 +686,7 @@ function errorMessage(error) {
 
 .save-panel { display: grid; grid-template-columns: minmax(220px, 1fr) auto minmax(180px, 1fr) auto; align-items: end; gap: 0.75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-light); }
 .save-panel .form-group { margin: 0; }
-.field-label { display: block; margin-bottom: 0.35rem; color: var(--text-secondary); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+.field-label { display: block; margin-bottom: 0.35rem; color: var(--text-secondary); font-size: 0.75rem; font-weight: 700; }
 .scope-control { display: grid; grid-template-columns: repeat(3, auto); overflow: hidden; border: 1px solid var(--border); border-radius: 6px; }
 .scope-control button { min-height: 38px; padding: 0 0.8rem; border: 0; border-right: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-secondary); cursor: pointer; font-size: 0.75rem; white-space: nowrap; }
 .scope-control button:last-child { border-right: 0; }
@@ -692,6 +696,19 @@ function errorMessage(error) {
 .save-button { height: 38px; }
 
 .price-builder { display: grid; gap: 0.85rem; }
+
+.price-builder-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.price-builder-hint svg { flex-shrink: 0; margin-top: 1px; color: var(--text-muted); }
 .price-grid { display: grid; gap: 0.75rem; }
 .price-grid .form-group { min-width: 0; margin: 0; }
 .primary-fields { grid-template-columns: minmax(220px, 1fr) minmax(320px, 2fr); }

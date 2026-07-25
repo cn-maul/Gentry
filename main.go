@@ -22,7 +22,7 @@ import (
 var frontendDist embed.FS
 
 // Version 程序版本号，发布新版本时手动修改
-const Version = "v1.1.0"
+const Version = "v1.1.2"
 
 func main() {
 	setupConsoleEncoding()

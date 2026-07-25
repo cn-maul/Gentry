@@ -83,8 +83,6 @@ function removeField(index) {
   font-size: 0.75rem;
   font-weight: 700;
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 1px;
 }
 
 .fields-list {
