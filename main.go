@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"embed"
+	"errors"
 	"io/fs"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -50,6 +52,22 @@ func main() {
 	// 2. 从数据库加载并启动所有活跃的监控器
 	monitor.StartAllFromDB()
 
+	// 2.5 数据保留清理：启动 1 分钟后先跑一次，之后每 24 小时一次。
+	// goroutine 随进程退出即可，清理是幂等操作，中途被终止不影响数据一致性。
+	go func() {
+		time.Sleep(1 * time.Minute)
+		if err := database.RunRetention(); err != nil {
+			log.Printf("[DB] 数据保留清理失败: %v", err)
+		}
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := database.RunRetention(); err != nil {
+				log.Printf("[DB] 数据保留清理失败: %v", err)
+			}
+		}
+	}()
+
 	// 3. 载入前端（如果已构建）
 	var frontendFS fs.FS
 	if _, err := fs.ReadDir(frontendDist, "frontend/dist"); err == nil {
@@ -71,7 +89,7 @@ func main() {
 	go func() {
 		addr := ":" + getPort()
 		log.Printf("[Web] 服务启动: http://localhost%s", addr)
-		if err := ws.Run(addr); err != nil {
+		if err := ws.Run(addr); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Web 服务启动失败: %v", err)
 		}
 	}()
@@ -80,7 +98,14 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigCh
-	log.Printf("收到信号 %v，正在停止所有监控器...", sig)
+	log.Printf("收到信号 %v，正在停止服务...", sig)
+
+	// 先关 HTTP 拒绝新请求，再停监控器和投递服务
+	httpCtx, httpCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := ws.Shutdown(httpCtx); err != nil {
+		log.Printf("关闭 Web 服务超时: %v", err)
+	}
+	httpCancel()
 
 	monitor.StopAll()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)

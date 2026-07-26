@@ -2,6 +2,7 @@ package database
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -13,12 +14,24 @@ var DB *gorm.DB
 
 // Init 初始化 SQLite 数据库并自动迁移
 func Init(dbPath string) error {
+	// SQLite 并发配置：WAL 允许读写并发，busy_timeout 避免瞬时锁冲突直接报错。
+	// busy_timeout 是连接级 PRAGMA，通过 DSN 设置保证连接池每条连接都生效。
+	dsn := dbPath
+	if !strings.Contains(dsn, "?") {
+		dsn += "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
+	}
 	var err error
-	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+	DB, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		return err
+	}
+
+	// 监控循环、投递队列和 Web handler 会并发写库，SQLite 单写者，
+	// 限制单连接串行化写入配合 busy_timeout 最稳。
+	if sqlDB, err := DB.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(1)
 	}
 
 	// 自动迁移 Schema

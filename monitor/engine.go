@@ -445,7 +445,8 @@ func processDelivery(d database.NotificationDelivery) {
 		Updates(map[string]interface{}{
 			"status":      "sending",
 			"lease_until": leaseUntil,
-			"attempts":    d.Attempts + 1,
+			// SQL 原子自增，避免并发 claim 时用查询期旧值覆盖丢失计数
+			"attempts": gorm.Expr("attempts + 1"),
 		})
 	if result.Error != nil {
 		log.Printf("[DeliveryWorker] claim 失败 delivery=%d: %v", d.ID, result.Error)

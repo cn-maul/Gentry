@@ -2,6 +2,7 @@ package web
 
 import (
 	"io/fs"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -11,6 +12,7 @@ type WebServer struct {
 	engine     *gin.Engine
 	frontendFS fs.FS
 	version    string
+	httpServer *http.Server
 }
 
 // APIResponse 标准API响应格式

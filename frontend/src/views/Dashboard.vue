@@ -25,7 +25,7 @@
       <button class="btn btn-primary btn-sm" style="margin-top: 1rem;" @click="loadData">重试</button>
     </div>
 
-    <div class="empty" v-else-if="monitors.length === 0">
+    <div class="empty" v-else-if="!monitors || monitors.length === 0">
       <div class="empty-icon">📡</div>
       <p class="empty-title">还没有监控任务</p>
       <p class="empty-desc">粘贴一个网页地址，系统会自动识别需要关注的内容</p>
@@ -70,6 +70,7 @@
             v-for="m in group.items"
             :key="m.name"
             :monitor="m"
+            :pending="pendingNames.has(m.name)"
             @start="handleStart(m.name)"
             @stop="handleStop(m.name)"
             @edit="handleEdit(m.name)"
@@ -88,17 +89,33 @@ import { useRouter } from 'vue-router'
 import { fetchMonitors, startMonitor, stopMonitor, deleteMonitor } from '../api/monitors'
 import MonitorCard from '../components/MonitorCard.vue'
 import { useToastMessages } from '../composables/useToastMessages'
+import { useResource } from '../composables/useResource'
 
 const router = useRouter()
-const monitors = ref([])
-const loading = ref(true)
-const error = ref(null)
 const deleteTarget = ref(null)
 const { successMsg, pageErrorMsg, showSuccess, showError } = useToastMessages()
 
+const {
+  data: monitors,
+  loading,
+  error,
+  load: loadData,
+  refresh,
+} = useResource(fetchMonitors, { initial: [] })
+
+// 目标级 pending：操作期间只禁用对应卡片的按钮，不触发全页 loading
+const pendingNames = ref(new Set())
+
+function setPending(name, on) {
+  const next = new Set(pendingNames.value)
+  if (on) next.add(name)
+  else next.delete(name)
+  pendingNames.value = next
+}
+
 const groupList = computed(() => {
   const map = {}
-  for (const m of monitors.value) {
+  for (const m of (monitors.value || [])) {
     const g = m.group || '默认'
     if (!map[g]) map[g] = { name: g, items: [] }
     map[g].items.push(m)
@@ -113,42 +130,24 @@ const groupList = computed(() => {
 
 onMounted(loadData)
 
-async function loadData() {
-  loading.value = true
-  error.value = null
+async function toggleMonitor(name, start) {
+  setPending(name, true)
   try {
-    const res = await fetchMonitors()
-    if (res.code === 0) {
-      monitors.value = res.data || []
-    } else {
-      error.value = res.message || '加载失败'
-    }
+    await (start ? startMonitor(name) : stopMonitor(name))
+    showSuccess(start ? `「${name}」已启动` : `「${name}」已暂停`)
+    // 本地立即更新状态，再后台校准
+    const target = (monitors.value || []).find(m => m.name === name)
+    if (target) target.is_running = start
+    refresh()
   } catch (e) {
-    error.value = e.message || '网络错误'
+    showError((start ? '启动失败: ' : '暂停失败: ') + e.message)
   } finally {
-    loading.value = false
+    setPending(name, false)
   }
 }
 
-async function handleStart(name) {
-  try {
-    await startMonitor(name)
-    showSuccess(`「${name}」已启动`)
-    await loadData()
-  } catch (e) {
-    showError('启动失败: ' + (e.response?.data?.message || e.message))
-  }
-}
-
-async function handleStop(name) {
-  try {
-    await stopMonitor(name)
-    showSuccess(`「${name}」已暂停`)
-    await loadData()
-  } catch (e) {
-    showError('暂停失败: ' + (e.response?.data?.message || e.message))
-  }
-}
+const handleStart = name => toggleMonitor(name, true)
+const handleStop = name => toggleMonitor(name, false)
 
 function handleEdit(name) {
   router.push(`/edit/${encodeURIComponent(name)}`)
@@ -157,12 +156,17 @@ function handleEdit(name) {
 async function handleDelete() {
   const name = deleteTarget.value
   deleteTarget.value = null
+  setPending(name, true)
   try {
     await deleteMonitor(name)
     showSuccess(`「${name}」已删除`)
-    await loadData()
+    // 本地移除，再后台校准
+    monitors.value = (monitors.value || []).filter(m => m.name !== name)
+    refresh()
   } catch (e) {
-    showError('删除失败: ' + (e.response?.data?.message || e.message))
+    showError('删除失败: ' + e.message)
+  } finally {
+    setPending(name, false)
   }
 }
 

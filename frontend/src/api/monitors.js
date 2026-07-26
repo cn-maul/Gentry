@@ -9,17 +9,41 @@ function applyAuth(config) {
   return config
 }
 
+// 响应拦截器：
+// 1. HTTP 成功但业务码非 0 时抛出异常（error.isBusinessError = true, error.code = 业务码），
+//    页面无需再逐处判断 res.code === 0（保留判断也兼容：能走到 .then 的响应 code 必为 0）。
+// 2. HTTP 错误时，如果后端带了 message，重写 e.message，页面可直接使用 e.message。
+function normalizeResponse(r) {
+  const body = r.data
+  if (body && typeof body.code === 'number' && body.code !== 0) {
+    const err = new Error(body.message || '操作失败')
+    err.code = body.code
+    err.isBusinessError = true
+    err.response = r
+    return Promise.reject(err)
+  }
+  return r
+}
+
+function normalizeError(e) {
+  const msg = e.response?.data?.message
+  if (msg) e.message = msg
+  return Promise.reject(e)
+}
+
 const client = axios.create({
   baseURL: '/api/v1',
   timeout: 10000,
 })
 client.interceptors.request.use(applyAuth)
+client.interceptors.response.use(normalizeResponse, normalizeError)
 
 const rootClient = axios.create({
   baseURL: '/api',
   timeout: 10000,
 })
 rootClient.interceptors.request.use(applyAuth)
+rootClient.interceptors.response.use(normalizeResponse, normalizeError)
 
 export function setAuthToken(token) {
   if (token) localStorage.setItem('alterbot_auth_token', token)

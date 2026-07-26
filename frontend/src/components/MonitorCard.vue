@@ -28,7 +28,7 @@
     </div>
 
     <div class="card-actions" @click.stop>
-      <button class="circle-btn" :class="isRunning ? 'btn-pause' : 'btn-play'" @click="$emit(isRunning ? 'stop' : 'start')" :title="isRunning ? '暂停' : '启动'">
+      <button class="circle-btn" :class="isRunning ? 'btn-pause' : 'btn-play'" :disabled="pending" @click="$emit(isRunning ? 'stop' : 'start')" :title="isRunning ? '暂停' : '启动'">
         <svg v-if="isRunning" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
           <rect x="6" y="4" width="4" height="16" rx="1"/>
           <rect x="14" y="4" width="4" height="16" rx="1"/>
@@ -37,10 +37,10 @@
           <path d="M8 5v14l11-7z"/>
         </svg>
       </button>
-      <button class="icon-btn" title="编辑" @click="$emit('edit')">
+      <button class="icon-btn" title="编辑" :disabled="pending" @click="$emit('edit')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
       </button>
-      <button class="icon-btn icon-btn-danger" title="删除" @click="$emit('delete')">
+      <button class="icon-btn icon-btn-danger" title="删除" :disabled="pending" @click="$emit('delete')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
       </button>
     </div>
@@ -53,6 +53,7 @@ import StatusBadge from './StatusBadge.vue'
 
 const props = defineProps({
   monitor: { type: Object, required: true },
+  pending: { type: Boolean, default: false },
 })
 
 defineEmits(['start', 'stop', 'edit', 'delete', 'view'])
@@ -213,6 +214,13 @@ function formatTime(t) {
   align-items: center;
   gap: 0.25rem;
   flex-shrink: 0;
+}
+
+.circle-btn:disabled,
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Circular play/pause button */

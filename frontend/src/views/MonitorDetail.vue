@@ -358,7 +358,7 @@ async function toggleRun() {
   try {
     if (monitor.value.is_running) {
       await stopMonitor(route.params.name)
-      showError('监控器已暂停')
+      showSuccess('监控器已暂停')
     } else {
       await startMonitor(route.params.name)
       showSuccess('监控器已启动')
