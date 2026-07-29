@@ -40,20 +40,7 @@ func NewEngine(site *database.Site) (*Engine, error) {
 	site = &normalizedSite
 
 	f := fetcher.New()
-	selectors := SiteSelectors{
-		Container: site.Container,
-		Item:      site.Item,
-		Fields:    make([]FieldConfig, len(site.Fields)),
-	}
-	for i, f := range site.Fields {
-		selectors.Fields[i] = FieldConfig{
-			Name:      f.Name,
-			Selector:  f.Selector,
-			Type:      f.Type,
-			Attr:      f.Attr,
-			Transform: f.Transform,
-		}
-	}
+	selectors := SiteSelectorsFromSite(site)
 
 	rule, err := ParseDetectionRule(site.StrategyConfig)
 	if err != nil {

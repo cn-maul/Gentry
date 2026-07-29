@@ -2,6 +2,8 @@ package monitor
 
 import (
 	"time"
+
+	"github.com/cn-maul/Gentry/database"
 )
 
 // Observation 表示一次提取的规范化观测结果
@@ -113,3 +115,23 @@ type EventFormatter interface {
 
 // SnapshotSet 按 item_key 索引的快照集合
 type SnapshotSet map[string]Snapshot
+
+// SiteSelectorsFromSite 将 database.Site 转换为 SiteSelectors
+// 用于统一 Site 到选择器配置的转换逻辑
+func SiteSelectorsFromSite(site *database.Site) SiteSelectors {
+	selectors := SiteSelectors{
+		Container: site.Container,
+		Item:      site.Item,
+		Fields:    make([]FieldConfig, len(site.Fields)),
+	}
+	for i, f := range site.Fields {
+		selectors.Fields[i] = FieldConfig{
+			Name:      f.Name,
+			Selector:  f.Selector,
+			Type:      f.Type,
+			Attr:      f.Attr,
+			Transform: f.Transform,
+		}
+	}
+	return selectors
+}

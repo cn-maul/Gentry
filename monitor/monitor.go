@@ -43,20 +43,7 @@ func newMonitor(site *database.Site, fetcherOpts ...fetcher.Option) *Monitor {
 	f := fetcher.New(fetcherOpts...)
 
 	// 从 database.Site 构建选择器信息
-	selectors := SiteSelectors{
-		Container: site.Container,
-		Item:      site.Item,
-		Fields:    make([]FieldConfig, len(site.Fields)),
-	}
-	for i, f := range site.Fields {
-		selectors.Fields[i] = FieldConfig{
-			Name:      f.Name,
-			Selector:  f.Selector,
-			Type:      f.Type,
-			Attr:      f.Attr,
-			Transform: f.Transform,
-		}
-	}
+	selectors := SiteSelectorsFromSite(site)
 
 	m := &Monitor{
 		site:      site,
@@ -148,14 +135,10 @@ func performCheck(m *Monitor, isFirst bool) {
 	startTime := time.Now()
 	outcome, err := m.CheckNow(context.Background())
 	duration := time.Since(startTime)
-	if outcome.StrategyType == "field_transition" {
-		logCheckResultFromEngine(m, outcome.Events, err, duration, isFirst)
-		if err == nil && len(outcome.Events) > 0 {
-			log.Printf("[%s] 产生 %d 个事件，等待投递队列处理", m.siteName(), len(outcome.Events))
-		}
-		return
+	logCheckResult(m, outcome, err, duration, isFirst)
+	if outcome.StrategyType == "field_transition" && err == nil && len(outcome.Events) > 0 {
+		log.Printf("[%s] 产生 %d 个事件，等待投递队列处理", m.siteName(), len(outcome.Events))
 	}
-	logCheckResult(m, outcome.Updates, err, duration, isFirst)
 }
 
 // CheckNow 串行执行一次检查；定时检查和手动检查必须复用此入口。
@@ -177,13 +160,13 @@ func (m *Monitor) CheckNow(ctx context.Context) (CheckOutcome, error) {
 	if strategyType == "field_transition" {
 		engine, createErr := NewEngine(&site)
 		if createErr != nil {
-			updateMonitorStatusFromEngine(m, nil, createErr, time.Since(startTime))
+			updateMonitorStatus(m, 0, createErr, time.Since(startTime))
 			return outcome, fmt.Errorf("创建引擎失败: %w", createErr)
 		}
 		events, isFirstBaseline, checkErr := engine.CheckOnce(checkCtx)
 		outcome.Events = events
 		outcome.IsFirstBaseline = isFirstBaseline
-		updateMonitorStatusFromEngine(m, events, checkErr, time.Since(startTime))
+		updateMonitorStatus(m, len(events), checkErr, time.Since(startTime))
 		if isFirstBaseline && checkErr == nil {
 			m.SetBaselineStatus("ready")
 		}
@@ -200,7 +183,7 @@ func (m *Monitor) CheckNow(ctx context.Context) (CheckOutcome, error) {
 			m.SetBaselineStatus("ready")
 		}
 	}
-	updateMonitorStatus(m, updates, checkErr, time.Since(startTime))
+	updateMonitorStatus(m, len(updates), checkErr, time.Since(startTime))
 	if checkErr == nil && len(updates) > 0 {
 		m.sendCombinedNotification(updates)
 	}
@@ -230,7 +213,9 @@ func (m *Monitor) acquireCheck(ctx context.Context) (context.Context, func(), er
 	return checkCtx, release, nil
 }
 
-func updateMonitorStatus(m *Monitor, updates []ExtractResult, err error, duration time.Duration) {
+// updateMonitorStatus 统一更新监控器状态
+// resultCount 表示检测到的新内容/事件数量
+func updateMonitorStatus(m *Monitor, resultCount int, err error, duration time.Duration) {
 	site := m.siteSnapshot()
 	m.updateStatus(func(s *MonitorStatus) {
 		s.LastCheck = time.Now()
@@ -241,9 +226,9 @@ func updateMonitorStatus(m *Monitor, updates []ExtractResult, err error, duratio
 			s.LastError = err.Error()
 		} else {
 			s.LastError = ""
-			if len(updates) > 0 {
+			if resultCount > 0 {
 				s.LastUpdate = time.Now()
-				s.UpdatesCount += len(updates)
+				s.UpdatesCount += resultCount
 			}
 		}
 	})
@@ -254,30 +239,9 @@ func updateMonitorStatus(m *Monitor, updates []ExtractResult, err error, duratio
 	}
 }
 
-func updateMonitorStatusFromEngine(m *Monitor, events []ChangeEvent, err error, duration time.Duration) {
-	site := m.siteSnapshot()
-	m.updateStatus(func(s *MonitorStatus) {
-		s.LastCheck = time.Now()
-		s.LastDuration = duration
-		s.NextCheck = time.Now().Add(site.GetCheckInterval())
-
-		if err != nil {
-			s.LastError = err.Error()
-		} else {
-			s.LastError = ""
-			if len(events) > 0 {
-				s.LastUpdate = time.Now()
-				s.UpdatesCount += len(events)
-			}
-		}
-	})
-
-	if err := database.GetDB().Model(&database.Site{}).Where("id = ?", site.ID).Update("LastCheckAt", time.Now()).Error; err != nil {
-		log.Printf("[%s] 更新 LastCheckAt 失败: %v", site.Name, err)
-	}
-}
-
-func logCheckResult(m *Monitor, updates []ExtractResult, err error, duration time.Duration, isFirst bool) {
+// logCheckResult 统一记录检查结果日志
+// outcome 包含检查结果的完整信息
+func logCheckResult(m *Monitor, outcome CheckOutcome, err error, duration time.Duration, isFirst bool) {
 	prefix := "检查"
 	if isFirst {
 		prefix = "首次检查"
@@ -289,35 +253,25 @@ func logCheckResult(m *Monitor, updates []ExtractResult, err error, duration tim
 		return
 	}
 
-	if len(updates) > 0 {
-		log.Printf("[%s] %s发现 %d 条更新 (耗时: %v)", name, prefix, len(updates), duration)
-		for _, item := range updates {
+	if outcome.StrategyType == "field_transition" {
+		if len(outcome.Events) > 0 {
+			log.Printf("[%s] %s发现 %d 个事件 (耗时: %v)", name, prefix, len(outcome.Events), duration)
+			for _, event := range outcome.Events {
+				log.Printf(" - [%s] %s: %s", event.EventType, event.Title, event.NewValue)
+			}
+		} else {
+			log.Printf("[%s] %s未发现变化 (耗时: %v)", name, prefix, duration)
+		}
+		return
+	}
+
+	if len(outcome.Updates) > 0 {
+		log.Printf("[%s] %s发现 %d 条更新 (耗时: %v)", name, prefix, len(outcome.Updates), duration)
+		for _, item := range outcome.Updates {
 			log.Printf(" - %s", item["title"])
 		}
 	} else {
 		log.Printf("[%s] %s未发现新内容 (耗时: %v)", name, prefix, duration)
-	}
-}
-
-func logCheckResultFromEngine(m *Monitor, events []ChangeEvent, err error, duration time.Duration, isFirst bool) {
-	prefix := "检查"
-	if isFirst {
-		prefix = "首次检查"
-	}
-
-	name := m.siteName()
-	if err != nil {
-		log.Printf("[%s] %s失败 (耗时: %v): %v", name, prefix, duration, err)
-		return
-	}
-
-	if len(events) > 0 {
-		log.Printf("[%s] %s发现 %d 个事件 (耗时: %v)", name, prefix, len(events), duration)
-		for _, event := range events {
-			log.Printf(" - [%s] %s: %s", event.EventType, event.Title, event.NewValue)
-		}
-	} else {
-		log.Printf("[%s] %s未发现变化 (耗时: %v)", name, prefix, duration)
 	}
 }
 
