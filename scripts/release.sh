@@ -11,6 +11,11 @@ if [ -z "$GITHUB_TOKEN" ]; then
   exit 1
 fi
 
+# 构建发布包（跨平台）
+echo "=== 构建发布包 ==="
+cd "$(dirname "$0")/.."
+make release
+
 # Create release
 echo "=== Creating release ==="
 RELEASE_JSON=$(curl -s -X POST "https://api.github.com/repos/$REPO/releases" \
@@ -27,7 +32,11 @@ RELEASE_ID=$(echo "$RELEASE_JSON" | python3 -c "import sys,json; print(json.load
 echo "Release ID: $RELEASE_ID"
 
 # Upload assets
-for FILE in dist/gentry-linux-amd64 dist/gentry-windows-amd64.exe; do
+for FILE in gentry-linux-amd64 gentry-windows-amd64.exe; do
+  if [ ! -f "$FILE" ]; then
+    echo "❌ 文件 $FILE 不存在，请确保 make release 已成功执行"
+    exit 1
+  fi
   BASENAME=$(basename "$FILE")
   echo "=== Uploading $BASENAME ==="
   curl -s -X POST "https://uploads.github.com/repos/$REPO/releases/$RELEASE_ID/assets?name=$BASENAME" \

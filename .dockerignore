@@ -1,30 +1,39 @@
 # Git
-.git/
+.git
 .gitignore
 
-# Go
-gentry
-gentry-linux-*
-gentry-windows-*
-*.db
-*.db-wal
-*.db-shm
-
-# Frontend local dev
-frontend/node_modules/
-frontend/dist/
-
-# Config (sensitive)
-config.json
-config.private.json
+# Frontend (独立构建)
+frontend/node_modules
+frontend/dist
 
 # IDE
-.idea/
-.vscode/
+.idea
+.vscode
 
-# Claude
-.claude/
+# OS
+.DS_Store
+Thumbs.db
 
-# Other
-examples/
-*.xlsx
+# Docs
+docs/
+
+# Test files
+*_test.go
+*.test.js
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Temporary files
+*.tmp
+*.log
+*.swp
+*~
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore

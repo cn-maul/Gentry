@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"embed"
 	"errors"
-	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -20,9 +18,6 @@ import (
 	"github.com/cn-maul/Gentry/web"
 )
 
-//go:embed frontend/dist
-var frontendDist embed.FS
-
 // Version 程序版本号，发布新版本时手动修改
 const Version = "v1.1.2"
 
@@ -30,6 +25,7 @@ func main() {
 	setupConsoleEncoding()
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	log.Println("=== Gentry 网页变更监控系统 ===")
+	log.Println("[模式] API 模式（前后端分离）")
 
 	// 1. 初始化数据库
 	dbPath := "gentry.db"
@@ -68,33 +64,21 @@ func main() {
 		}
 	}()
 
-	// 3. 载入前端（如果已构建）
-	var frontendFS fs.FS
-	if _, err := fs.ReadDir(frontendDist, "frontend/dist"); err == nil {
-		sub, err := fs.Sub(frontendDist, "frontend/dist")
-		if err == nil {
-			frontendFS = sub
-			log.Println("[Web] 前端已嵌入，管理界面可用")
-		}
-	} else {
-		log.Println("[Web] 前端未构建，仅 API 模式运行（cd frontend && npm run dev）")
-	}
-
-	// 4. 启动投递服务
+	// 3. 启动投递服务
 	deliverySvc := monitor.NewDeliveryService()
 	deliverySvc.Start()
 
-	// 5. 启动 Web 服务
-	ws := web.NewWebServer(frontendFS, Version)
+	// 4. 启动 Web 服务（纯 API 模式）
+	ws := web.NewWebServer(Version)
 	go func() {
 		addr := ":" + getPort()
-		log.Printf("[Web] 服务启动: http://localhost%s", addr)
+		log.Printf("[Web] API 服务启动: http://localhost%s/api/v1", addr)
 		if err := ws.Run(addr); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Web 服务启动失败: %v", err)
 		}
 	}()
 
-	// 6. 等待中断信号
+	// 5. 等待中断信号
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigCh

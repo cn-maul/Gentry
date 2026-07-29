@@ -1,43 +1,40 @@
-# docker compose for Gentry
-#
-# 快速启动:
-#   docker compose up -d
-#   docker compose logs -f
-#
-# 访问 http://localhost:8889 进入管理界面
-#
-# 数据持久化在 gentry-data 卷中（包含 SQLite 数据库）
-# 停止: docker compose down
-# 完全删除（含数据）: docker compose down -v
+version: '3.8'
 
 services:
-  gentry:
+  # Gentry 后端 API
+  gentry-backend:
     build:
       context: .
       dockerfile: Dockerfile
-      # args:
-        #   GO_VERSION: 1.26-alpine
-    image: gentry:latest
-    container_name: gentry
-    restart: unless-stopped
+    container_name: gentry-backend
     ports:
-      - "8889:8889"
+      - "8080:8080"
     volumes:
-      # SQLite 数据库持久化
       - gentry-data:/app/data
-      # （可选）挂载推送通知配置
-      # - ./config.json:/app/data/config.json:ro
     environment:
+      - PORT=8080
       - GIN_MODE=release
-      - PORT=8889
-      # 设置时区（可选，默认 UTC）
-      - TZ=Asia/Shanghai
+      - ALLOWED_ORIGINS=*
+      - API_TOKEN=${API_TOKEN:-}
+      - DB_PATH=/app/data/gentry.db
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8889/api/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/api/v1/health"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
-      start_period: 15s
+
+  # Gentry 前端 Web UI
+  gentry-web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gentry-web
+    ports:
+      - "80:80"
+    depends_on:
+      - gentry-backend
+    restart: unless-stopped
 
 volumes:
   gentry-data:
