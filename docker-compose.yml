@@ -4,7 +4,7 @@ services:
   # Gentry 后端 API
   gentry-backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: gentry-backend
     ports:

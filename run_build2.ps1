@@ -1,6 +1,0 @@
-$batPath = "C:\Users\PC\Desktop\projects\Gentry\build-windows.bat"
-Write-Output "Bat path: $batPath"
-Write-Output "Exists: $(Test-Path $batPath)"
-Write-Output "Running..."
-& cmd.exe /c "call `"$batPath`" build"
-Write-Output "Exit code: $LASTEXITCODE"

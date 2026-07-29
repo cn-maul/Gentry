@@ -2,10 +2,6 @@
 .git
 .gitignore
 
-# Frontend (独立构建)
-frontend/node_modules
-frontend/dist
-
 # IDE
 .idea
 .vscode
@@ -19,19 +15,25 @@ docs/
 
 # Test files
 *_test.go
-*.test.js
 
 # Build artifacts
 *.exe
 *.dll
 *.so
 *.dylib
+gentry
+gentry.exe
 
 # Temporary files
 *.tmp
 *.log
 *.swp
 *~
+
+# Database
+*.db
+*.db-wal
+*.db-shm
 
 # Docker
 Dockerfile
