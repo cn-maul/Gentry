@@ -1,0 +1,489 @@
+.scan-rules-page {
+  max-width: 1120px;
+}
+.scan-rules-page .header-actions svg,
+.scan-rules-page .scan-button svg {
+  width: 16px;
+  height: 16px;
+}
+.scan-rules-page .file-input {
+  display: none;
+}
+
+.scan-rules-page .builder-section,
+.scan-rules-page .library-section {
+  padding: 0 0 1.75rem;
+}
+.scan-rules-page .builder-section {
+  border-bottom: 1px solid var(--border);
+}
+.scan-rules-page .library-section {
+  padding-top: 1.75rem;
+}
+.scan-rules-page .section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.scan-rules-page .section-title-row h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+}
+.scan-rules-page .result-count,
+.scan-rules-page .library-title > span {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.scan-rules-page .scan-form {
+  display: grid;
+  grid-template-columns: minmax(280px, 2fr) minmax(200px, 1fr) auto;
+  align-items: end;
+  gap: 0.75rem;
+}
+.scan-rules-page .scan-form .form-group {
+  min-width: 0;
+  margin: 0;
+}
+.scan-rules-page .scan-button {
+  height: 38px;
+  padding-inline: 1.2rem;
+}
+.scan-rules-page .inline-error {
+  margin-top: 0.75rem;
+  color: var(--error);
+  font-size: 0.8125rem;
+}
+.scan-rules-page .scan-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 120px;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+.scan-rules-page .scan-loading .spinner {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border-width: 2px;
+}
+
+.scan-rules-page .sample-list {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.scan-rules-page .save-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto minmax(180px, 1fr) auto;
+  align-items: end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-light);
+}
+.scan-rules-page .save-panel .form-group {
+  margin: 0;
+}
+.scan-rules-page .scope-control {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.scan-rules-page .scope-control button {
+  min-height: 38px;
+  padding: 0 0.8rem;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.scan-rules-page .scope-control button:last-child {
+  border-right: 0;
+}
+.scan-rules-page .scope-control button.active {
+  background: var(--green);
+  color: #000;
+  font-weight: 700;
+}
+.scan-rules-page .scope-control button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.scan-rules-page .scope-summary {
+  align-self: center;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scan-rules-page .save-button {
+  height: 38px;
+}
+
+.scan-rules-page .price-builder {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.scan-rules-page .price-builder-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.scan-rules-page .price-builder-hint svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--text-muted);
+}
+.scan-rules-page .price-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+.scan-rules-page .price-grid .form-group {
+  min-width: 0;
+  margin: 0;
+}
+.scan-rules-page .primary-fields {
+  grid-template-columns: minmax(220px, 1fr) minmax(320px, 2fr);
+}
+.scan-rules-page .source-fields {
+  grid-template-columns: minmax(300px, 2fr) repeat(3, minmax(140px, 1fr));
+}
+.scan-rules-page .mapping-fields,
+.scan-rules-page .header-fields {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.scan-rules-page .variable-section {
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+}
+.scan-rules-page .variable-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.scan-rules-page .variable-heading > div {
+  display: grid;
+  gap: 0.2rem;
+}
+.scan-rules-page .variable-heading strong {
+  font-size: 0.8125rem;
+}
+.scan-rules-page .variable-heading span {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+.scan-rules-page .variable-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.7fr) minmax(220px, 1.5fr) minmax(180px, 1fr) auto;
+  align-items: end;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.scan-rules-page .variable-row .form-group {
+  min-width: 0;
+  margin: 0;
+}
+.scan-rules-page .variable-remove {
+  margin-bottom: 2px;
+}
+.scan-rules-page .price-preview {
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+}
+.scan-rules-page .preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.55rem;
+  font-size: 0.8125rem;
+}
+.scan-rules-page .preview-heading span {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+.scan-rules-page .sample-price {
+  flex-shrink: 0;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+.scan-rules-page .price-actions {
+  display: grid;
+  grid-template-columns: auto minmax(160px, 1fr) repeat(3, auto);
+  align-items: end;
+  gap: 0.75rem;
+  padding-top: 0.15rem;
+}
+.scan-rules-page .price-actions .btn {
+  height: 38px;
+}
+
+.scan-rules-page .rule-list {
+  border-top: 1px solid var(--border);
+}
+.scan-rules-page .rule-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.scan-rules-page .rule-main {
+  min-width: 0;
+}
+.scan-rules-page .rule-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.scan-rules-page .rule-heading strong {
+  font-size: 0.875rem;
+}
+.scan-rules-page .source-badge,
+.scan-rules-page .scope-badge,
+.scan-rules-page .disabled-badge {
+  padding: 0.14rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+.scan-rules-page .source-badge {
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+}
+.scan-rules-page .source-badge.api {
+  color: var(--green);
+}
+.scan-rules-page .scope-badge {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+.scan-rules-page .scope-global {
+  color: var(--green);
+}
+.scan-rules-page .disabled-badge {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+.scan-rules-page .rule-target {
+  margin-top: 0.35rem;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scan-rules-page .rule-structure {
+  display: flex;
+  gap: 0.4rem;
+  min-width: 0;
+  margin-top: 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+}
+.scan-rules-page .rule-structure code {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scan-rules-page .field-count {
+  flex-shrink: 0;
+  margin-left: 0.35rem;
+}
+.scan-rules-page .rule-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.scan-rules-page .list-state {
+  padding: 2.5rem 0;
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 900px) {
+  .scan-rules-page .scan-form {
+    grid-template-columns: 1fr 1fr;
+  }
+  .scan-rules-page .scan-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  .scan-rules-page .save-panel {
+    grid-template-columns: 1fr 1fr;
+  }
+  .scan-rules-page .source-fields,
+  .scan-rules-page .mapping-fields,
+  .scan-rules-page .header-fields,
+  .scan-rules-page .variable-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .scan-rules-page .price-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+  .scan-rules-page .price-actions .scope-summary {
+    order: initial;
+  }
+  .scan-rules-page .scope-summary {
+    order: 3;
+  }
+  .scan-rules-page .save-button {
+    order: 4;
+    justify-self: end;
+  }
+}
+
+@media (max-width: 640px) {
+  .scan-rules-page .page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .scan-rules-page .header-actions {
+    align-self: flex-start;
+  }
+  .scan-rules-page .scan-form,
+  .scan-rules-page .save-panel,
+  .scan-rules-page .primary-fields,
+  .scan-rules-page .source-fields,
+  .scan-rules-page .mapping-fields,
+  .scan-rules-page .header-fields,
+  .scan-rules-page .variable-row,
+  .scan-rules-page .price-actions {
+    grid-template-columns: 1fr;
+  }
+  .scan-rules-page .variable-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .scan-rules-page .variable-remove {
+    justify-self: end;
+  }
+  .scan-rules-page .scan-button,
+  .scan-rules-page .save-button {
+    width: 100%;
+    justify-self: stretch;
+  }
+  .scan-rules-page .price-actions .btn {
+    width: 100%;
+  }
+  .scan-rules-page .scope-control {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .scan-rules-page .scope-control button {
+    padding-inline: 0.35rem;
+    white-space: normal;
+  }
+  .scan-rules-page .scope-summary,
+  .scan-rules-page .save-button {
+    order: initial;
+  }
+  .scan-rules-page .rule-structure code {
+    max-width: 120px;
+  }
+}
+
+/* ===== 提取/AI 样本行 ===== */
+.scan-rules-page .sample-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.3rem 0.6rem;
+  background: var(--bg-card);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+.scan-rules-page .sample-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.scan-rules-page .sample-date {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== AI 提取 ===== */
+.scan-rules-page .ai-extract-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+.scan-rules-page .ai-extract-row .ai-keyword-field {
+  flex: 1;
+  margin: 0;
+}
+.scan-rules-page .ai-extract-row .ai-extract-button {
+  height: 38px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.scan-rules-page .ai-extract-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.scan-rules-page .optional-label {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.scan-rules-page .ai-result-preview {
+  margin-top: 0.85rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+.scan-rules-page .ai-result-preview.unverified {
+  border-color: rgba(255, 176, 32, 0.55);
+}
+.scan-rules-page .ai-result-note {
+  margin: 0.55rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.scan-rules-page .ai-result-preview.unverified .ai-result-note {
+  color: var(--warning);
+}
+
+@media (max-width: 768px) {
+  .scan-rules-page .ai-extract-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

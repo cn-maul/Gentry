@@ -1,0 +1,30 @@
+# 构建上下文为仓库根目录（Dockerfile 需要同时访问 frontend/ 与 backend/）
+
+# 依赖与构建产物
+**/node_modules
+frontend/dist
+backend/web/dist
+backend/gentry
+backend/gentry.exe
+backend/gentry-linux-amd64
+backend/gentry-windows-amd64.exe
+
+# 数据库与运行时文件
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# 文档与开发配置
+docs
+.git
+.github
+.vscode
+.idea
+.claude
+*.md
+!frontend/README.md
+
+# 本地环境文件
+.env.local
+.env.*.local

@@ -1,0 +1,8 @@
+.add-monitor {
+  max-width: 820px;
+}
+
+/* 返回按钮位于页头之上，标题需要一点额外间距 */
+.add-monitor .page-header h1 {
+  margin-top: 0.5rem;
+}

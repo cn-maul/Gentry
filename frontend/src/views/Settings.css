@@ -1,0 +1,26 @@
+.settings-page {
+  max-width: 640px;
+}
+
+.settings-page .proxy-row {
+  display: flex;
+  gap: 0.5rem;
+}
+.settings-page .proxy-row .form-input {
+  flex: 1;
+}
+
+.settings-page .ai-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.settings-page .hint {
+  color: var(--green);
+  margin-top: 0.35rem;
+}
+.settings-page .hint.error-hint {
+  color: var(--error);
+}

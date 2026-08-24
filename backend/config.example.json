@@ -1,0 +1,40 @@
+{
+  "notification": {
+    "service": "pushplus",
+    "config": {
+      "token": "your_token_here",
+      "channel": "mail"
+    }
+  },
+  "sites": [
+    {
+      "name": "示例站点",
+      "url": "https://example.com/announce/",
+      "group": "默认",
+      "selectors": {
+        "container": "div.news-list",
+        "item": "div.news-item",
+        "fields": [
+          {
+            "name": "title",
+            "selector": "a",
+            "type": "text"
+          },
+          {
+            "name": "url",
+            "selector": "a",
+            "attr": "href",
+            "type": "attr"
+          },
+          {
+            "name": "date",
+            "selector": "span.date",
+            "type": "text",
+            "transform": "trim([])"
+          }
+        ]
+      },
+      "check_interval": 3600
+    }
+  ]
+}

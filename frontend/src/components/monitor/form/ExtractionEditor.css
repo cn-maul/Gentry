@@ -1,0 +1,202 @@
+.extraction-editor .ee-section-header {
+  margin-bottom: 0.5rem;
+}
+.extraction-editor .section-desc {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+.extraction-editor .selection-confirmed {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-left: 3px solid var(--success);
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.extraction-editor .scan-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.extraction-editor .scan-keyword {
+  flex: 1;
+  margin-bottom: 0;
+}
+.extraction-editor .scan-action {
+  flex-shrink: 0;
+  padding-bottom: 2px;
+}
+
+.extraction-editor .scan-results {
+  margin-bottom: 1rem;
+}
+.extraction-editor .results-label {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.extraction-editor .candidate-card {
+  background: var(--bg-card);
+  border: 2px solid transparent;
+  border-radius: var(--radius-lg);
+  padding: 0.85rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.extraction-editor .candidate-card:hover {
+  background: var(--bg-hover);
+}
+.extraction-editor .candidate-card.selected {
+  border-color: var(--green);
+  background: rgba(29, 185, 84, 0.04);
+}
+
+.extraction-editor .candidate-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+.extraction-editor .candidate-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.extraction-editor .candidate-badge {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--bg-elevated);
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-pill);
+}
+.extraction-editor .candidate-count {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.extraction-editor .candidate-hit {
+  font-size: 0.75rem;
+  color: var(--green);
+}
+.extraction-editor .apply-btn {
+  flex-shrink: 0;
+}
+
+.extraction-editor .candidate-samples {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.extraction-editor .sample-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  font-size: 0.8125rem;
+}
+.extraction-editor .sample-title {
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.extraction-editor .sample-meta {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+}
+.extraction-editor .sample-more {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 0.2rem;
+}
+
+.extraction-editor .empty-scan {
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.extraction-editor .manual-section,
+.extraction-editor .fields-section {
+  margin-top: 0.75rem;
+}
+.extraction-editor .fields-section {
+  margin-top: 0.5rem;
+}
+.extraction-editor .fields-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+.extraction-editor .fields-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.extraction-editor .fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.extraction-editor .field-card {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.75rem;
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+}
+.extraction-editor .field-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+  gap: 0.5rem;
+}
+/* 仅负责与字段卡片对齐；外观由共享 btn-icon 提供 */
+.extraction-editor .field-remove-btn {
+  margin-top: 1.5rem;
+}
+
+.extraction-editor .source-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.extraction-editor .source-grid .form-group {
+  min-width: 0;
+}
+.extraction-editor .header-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.extraction-editor .header-grid .form-group {
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .extraction-editor .scan-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .extraction-editor .field-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .extraction-editor .source-grid,
+  .extraction-editor .header-grid {
+    grid-template-columns: 1fr;
+  }
+}

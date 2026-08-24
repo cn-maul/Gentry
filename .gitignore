@@ -1,0 +1,67 @@
+# 编译产物
+*.exe
+*.dll
+*.so
+*.dylib
+gentry
+gentry-linux-amd64
+gentry-windows-amd64.exe
+alterbot
+alterbot.exe
+Gentry
+
+# 数据库
+*.db
+*.db-wal
+*.db-shm
+gentry.db*
+
+# 配置文件（包含敏感信息）
+config.json
+config.private.json
+.env.local
+.env.*.local
+
+# 依赖目录
+node_modules/
+.pnpm-store/
+.gomodcache/
+.gocache/
+
+# 构建产物
+frontend/dist/
+backend/gentry
+backend/gentry.exe
+dist/alterbot-*
+dist/gentry-*
+
+# 嵌入用前端产物（占位 index.html 除外）
+backend/web/dist/*
+!backend/web/dist/index.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.log
+*.bak
+tmp_*
+build_*
+*~dp0deploy/
+
+# 测试
+.update-e2e-test/
+*.xlsx
+
+# 工具
+.claude/
+.reasonix/
+.codex-sheet-work/

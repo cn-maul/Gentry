@@ -1,0 +1,226 @@
+.monitor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.monitor-form .step-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+}
+
+.monitor-form .step {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.monitor-form .step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+
+.monitor-form .step.active .step-num,
+.monitor-form .step.done .step-num {
+  background: var(--green);
+  color: #000;
+}
+
+.monitor-form .step-text {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.monitor-form .step.active .step-text {
+  color: var(--text);
+}
+
+.monitor-form .step.done .step-text {
+  color: var(--text-secondary);
+}
+
+.monitor-form .step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--bg-elevated);
+  margin: 0 0.5rem;
+  border-radius: 1px;
+  transition: var(--transition);
+}
+
+.monitor-form .step-line.done {
+  background: var(--green);
+}
+
+.monitor-form .advanced-settings {
+  margin-bottom: 1rem;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.monitor-form .advanced-settings > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 0.25rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+.monitor-form .advanced-settings > summary::-webkit-details-marker {
+  display: none;
+}
+.monitor-form .advanced-settings > summary span {
+  display: grid;
+  gap: 0.1rem;
+}
+.monitor-form .advanced-settings > summary strong {
+  color: var(--text);
+  font-size: 0.875rem;
+}
+.monitor-form .advanced-settings > summary small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+.monitor-form .advanced-settings > summary svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  transition: transform 160ms ease;
+}
+.monitor-form .advanced-settings[open] > summary svg {
+  transform: rotate(90deg);
+}
+.monitor-form .advanced-content {
+  padding: 0.5rem 0 0.25rem;
+}
+/* 高级面板内部的子表单改为分隔线布局（原 Vue :deep 规则） */
+.monitor-form .advanced-content .advanced-panel-section {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.monitor-form .advanced-content .settings-section {
+  margin: 0;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border-light);
+  border-radius: 0;
+  background: transparent;
+}
+.monitor-form .advanced-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.monitor-form .start-option {
+  margin: 0.25rem 0 1rem;
+}
+.monitor-form .start-option .checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.monitor-form .start-option input {
+  accent-color: var(--green);
+}
+
+.monitor-form .validation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: transparent;
+  border-radius: 0;
+}
+.monitor-form .validation-actions strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.875rem;
+}
+.monitor-form .validation-actions p {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-top: 0.15rem;
+}
+
+.monitor-form .baseline-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--warning-bg);
+  color: var(--warning);
+  border-radius: var(--radius-lg);
+  font-size: 0.8125rem;
+  margin-bottom: 1rem;
+  line-height: 1.4;
+}
+.monitor-form .baseline-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.monitor-form .notification-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--success-bg);
+  color: var(--success);
+  border-radius: var(--radius-lg);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.monitor-form .notification-summary svg {
+  flex-shrink: 0;
+}
+
+.monitor-form .notification-summary.not-configured {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.monitor-form .notification-summary .btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .monitor-form .validation-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .monitor-form .validation-actions .btn {
+    width: 100%;
+  }
+  .monitor-form .form-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+  .monitor-form .form-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
