@@ -15,6 +15,10 @@ backend/gentry-windows-amd64.exe
 *.db-shm
 *.log
 
+# 敏感配置（本地私密文件，不进入构建上下文）
+config.json
+config.private.json
+
 # 文档与开发配置
 docs
 .git

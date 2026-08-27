@@ -1126,6 +1126,19 @@
     max-width: 1240px;
   }
 
+  /* 页面容器统一宽度：所有视图使用一致的内容宽度并居中，
+     避免设置页 720px / 新增监控 860px / 规则库 1120px 参差不齐 */
+  .dashboard,
+  .monitor-detail,
+  .push-page,
+  .add-monitor,
+  .scan-rules-page,
+  .settings-page {
+    width: 100%;
+    max-width: 1120px;
+    margin: 0 auto;
+  }
+
   /* ===== 概览统计条（Dashboard） ===== */
   .stats-strip {
     display: grid;
@@ -1553,9 +1566,6 @@
   }
 
   /* 新增监控页（返回按钮位于页头之上，标题需要额外间距；详情页同理） */
-  .add-monitor {
-    max-width: 860px;
-  }
   .add-monitor .page-header h1,
   .monitor-detail .page-header h1 {
     margin-top: 0.5rem;
@@ -1977,9 +1987,6 @@
   }
 
   /* ===== 规则库页 ===== */
-  .scan-rules-page {
-    max-width: 1120px;
-  }
   .scan-rules-page .header-actions svg,
   .scan-rules-page .scan-button svg {
     width: 16px;
@@ -2580,10 +2587,6 @@
   }
 
   /* ===== 系统设置页 ===== */
-  .settings-page {
-    max-width: 720px;
-  }
-
   .settings-page .proxy-row {
     display: flex;
     gap: 0.5rem;
