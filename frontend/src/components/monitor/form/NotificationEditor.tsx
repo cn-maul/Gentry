@@ -1,6 +1,5 @@
 import type { MonitorFormState } from '@/lib/monitorForm'
 import type { NotifyAccount } from '@/api/types'
-import './NotificationEditor.css'
 
 interface NotificationEditorProps {
   value: MonitorFormState['notification']
@@ -51,7 +50,7 @@ export default function NotificationEditor({ value, accounts = [], onChange }: N
           </label>
         </div>
         {value.filter === 'keyword' && (
-          <div className="form-group" style={{ marginTop: '0.5rem' }}>
+          <div className="form-group mt-2">
             <label>推送关键词（多个用逗号隔开）</label>
             <input
               value={value.keywords}
@@ -76,7 +75,7 @@ export default function NotificationEditor({ value, accounts = [], onChange }: N
             ))}
           </div>
         ) : (
-          <p className="hint">暂无推送账户，请先在「推送管理」中添加</p>
+          <p className="hint">暂无推送账户，请先在「推送通知」中添加</p>
         )}
       </div>
     </div>

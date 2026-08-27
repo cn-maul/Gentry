@@ -1,6 +1,7 @@
 import { client, publicClient, type ApiEnvelope } from './client'
 import type {
-  AIExtractResult,
+  CaptureResult,
+  Category,
   ImportResult,
   LLMConnectionTestResult,
   LLMSettings,
@@ -121,6 +122,28 @@ export function fetchNotificationProviders(): Promise<ApiEnvelope<Record<string,
   return client.get('/settings/notification-providers').then((r) => r.data)
 }
 
+// ===== 分类管理 =====
+
+// 获取所有分类（监控器分组）
+export function fetchCategories(): Promise<ApiEnvelope<Category[]>> {
+  return client.get('/settings/categories').then((r) => r.data)
+}
+
+// 新建分类
+export function createCategory(name: string): Promise<ApiEnvelope<Category>> {
+  return client.post('/settings/categories', { name }).then((r) => r.data)
+}
+
+// 重命名分类（同步更新该分类下监控器的分组名）
+export function renameCategory(id: number, name: string): Promise<ApiEnvelope<Category>> {
+  return client.put(`/settings/categories/${id}`, { name }).then((r) => r.data)
+}
+
+// 删除分类（其下监控器迁移回「默认」）
+export function deleteCategory(id: number): Promise<ApiEnvelope<{ moved?: number }>> {
+  return client.delete(`/settings/categories/${id}`).then((r) => r.data)
+}
+
 // ===== 推送账户 CRUD =====
 
 // 获取所有推送账户
@@ -198,9 +221,20 @@ export function testLLMConnection(): Promise<ApiEnvelope<LLMConnectionTestResult
   return client.post('/settings/llm/test').then((r) => r.data)
 }
 
-// AI 提取扫描规则：按关键词辅助定位内容区域
-export function aiExtractScanRule(params: { url: string; keywords?: string }): Promise<ApiEnvelope<AIExtractResult>> {
-  return client.post('/settings/scan-rules/ai-extract', params, { timeout: 180000 }).then((r) => r.data)
+// 规则捕获：按 URL + 关键词产出候选规则草稿（统一捕获管线，LLM 提案）
+export function captureScanRule(params: { url: string; keywords?: string }): Promise<ApiEnvelope<CaptureResult>> {
+  return client.post('/settings/scan-rules/capture', params, { timeout: 180000 }).then((r) => r.data)
+}
+
+// 草稿直测：不落库按选择器配置执行一次只读提取
+export function testDraftMonitor(params: {
+  url: string
+  container: string
+  item?: string
+  fields?: ExtractionField[]
+  fetch_config?: FetchConfig | Record<string, unknown>
+}): Promise<ApiEnvelope<ValidationResult>> {
+  return client.post('/settings/scan-rules/test-draft', params).then((r) => r.data)
 }
 
 // ===== 更新接口 =====

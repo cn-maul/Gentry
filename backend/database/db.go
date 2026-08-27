@@ -36,9 +36,12 @@ func Init(dbPath string) error {
 	}
 
 	// 自动迁移 Schema
-	if err := DB.AutoMigrate(&Site{}, &SiteField{}, &UpdateRecord{}, &NotificationAccount{}, &ScanRuleTemplate{}, &ScanRuleField{}, &SystemSetting{}); err != nil {
+	if err := DB.AutoMigrate(&Site{}, &SiteField{}, &UpdateRecord{}, &NotificationAccount{}, &ScanRuleTemplate{}, &ScanRuleField{}, &SystemSetting{}, &Category{}); err != nil {
 		return err
 	}
+
+	// 确保默认分类存在
+	DB.FirstOrCreate(&Category{Name: "默认"}, Category{Name: "默认"})
 
 	DB.Model(&Site{}).Where("baseline_status = ''").Update("baseline_status", "pending")
 	DB.Model(&Site{}).Where("config_version = 0").Update("config_version", 1)

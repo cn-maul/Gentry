@@ -58,6 +58,10 @@ func (s *WebServer) registerSystemRoutes(group *gin.RouterGroup) {
 	group.GET("/groups", listGroups)
 	group.GET("/settings/notifications", getNotificationSettings)
 	group.PUT("/settings/notifications", updateNotificationSettings)
+	group.GET("/settings/categories", listCategories)
+	group.POST("/settings/categories", createCategory)
+	group.PUT("/settings/categories/:id", renameCategory)
+	group.DELETE("/settings/categories/:id", deleteCategory)
 }
 
 func (s *WebServer) registerMonitorRoutes(group *gin.RouterGroup) {
@@ -101,6 +105,8 @@ func (s *WebServer) registerScanRuleRoutes(group *gin.RouterGroup) {
 	rules.PUT("/:id", updateScanRule)
 	rules.DELETE("/:id", deleteScanRule)
 	rules.POST("/:id/test", testScanRule)
+	rules.POST("/capture", captureScanRule)
+	rules.POST("/test-draft", testDraftMonitor)
 }
 
 func (s *WebServer) registerUpdateRoutes(group *gin.RouterGroup) {

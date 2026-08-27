@@ -10,33 +10,6 @@ echo ========================================================
 echo   Gentry Backend Dev Server (Debug Mode)
 echo ========================================================
 echo.
-echo ---- Implementation Summary ----
-echo.
-echo   Phase 1: API Standardization
-echo     [OK] api/types.go - API type definitions
-echo     [OK] api/openapi.yaml - OpenAPI 3.0 spec
-echo     [OK] Error code system (40001-50001)
-echo.
-echo   Phase 2: Backend Decoupling
-echo     [OK] Removed go:embed frontend/dist
-echo     [OK] Removed static file serving
-echo     [OK] Refactored CORS with ALLOWED_ORIGINS
-echo     [OK] Unified API routes under /api/v1
-echo.
-echo   Phase 3: Frontend Independence
-echo     [OK] Updated API client with env vars
-echo     [OK] Configured Vite proxy and API base URL
-echo     [OK] Created .env files (.env.development, .env.production)
-echo     [OK] Created frontend Dockerfile and Nginx config
-echo     [OK] Created docker-compose.yml for one-click deploy
-echo.
-echo   Verification
-echo     [OK] go build ./...  - Passed
-echo     [OK] go test ./...   - All passed
-echo     [OK] go vet ./...    - Passed
-echo.
-echo ========================================================
-echo.
 
 set GIN_MODE=debug
 set PORT=%PORT%

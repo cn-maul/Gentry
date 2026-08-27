@@ -55,7 +55,7 @@ func newMonitor(site *database.Site, fetcherOpts ...fetcher.Option) *Monitor {
 			URL:            site.URL,
 			Group:          site.GroupName,
 			IsRunning:      true,
-			CheckInterval:  site.GetCheckInterval(),
+			CheckInterval:  durationSeconds(site.GetCheckInterval()),
 			NextCheck:      time.Now().Add(site.GetCheckInterval()),
 			BaselineStatus: site.BaselineStatus,
 		},
@@ -408,7 +408,7 @@ func (m *Monitor) saveResults(results []ExtractResult) error {
 	existingSet := make(map[string]struct{}, len(existing))
 	for _, k := range existing {
 		if k.Title != "" || k.URL != "" {
-			existingSet[k.Title+"|"+k.URL] = struct{}{}
+			existingSet[extractKey(ExtractResult{"title": k.Title, "url": k.URL})] = struct{}{}
 		}
 	}
 
@@ -416,7 +416,10 @@ func (m *Monitor) saveResults(results []ExtractResult) error {
 	for _, item := range results {
 		title := toString(item["title"])
 		urlStr := toString(item["url"])
-		key := title + "|" + urlStr
+		key := extractKey(item)
+		if key == "" {
+			continue
+		}
 		if _, exists := existingSet[key]; exists {
 			continue
 		}

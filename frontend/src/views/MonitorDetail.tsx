@@ -17,7 +17,6 @@ import type { Monitor, NotifyAccount, UpdateRecord } from '../api/types'
 import StatusBadge from '../components/StatusBadge'
 import UpdateTable from '../components/UpdateTable'
 import { useToastMessages } from '../hooks/useToastMessages'
-import './MonitorDetail.css'
 
 const UPDATES_PAGE_SIZE = 20
 
@@ -266,7 +265,7 @@ export default function MonitorDetail() {
             <Link to={`/edit/${encodeURIComponent(monitor.name)}`} className="btn btn-ghost btn-sm">
               编辑
             </Link>
-            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--error)' }} onClick={() => setShowDeleteConfirm(true)}>
+            <button className="btn btn-ghost btn-sm text-error" onClick={() => setShowDeleteConfirm(true)}>
               删除
             </button>
           </div>
@@ -285,7 +284,7 @@ export default function MonitorDetail() {
         <div className="empty">
           <div className="empty-icon">❌</div>
           <p>{error}</p>
-          <button className="btn btn-primary btn-sm" style={{ marginTop: '1rem' }} onClick={loadData}>
+          <button className="btn btn-primary btn-sm mt-4" onClick={loadData}>
             重试
           </button>
         </div>
@@ -311,7 +310,7 @@ export default function MonitorDetail() {
                   </div>
                   <div className="modal-body">
                     <p>确定要删除监控器「{monitor.name}」吗？</p>
-                    <p style={{ marginTop: '0.5rem' }}>删除后无法恢复，相关更新记录也会被清除。</p>
+                    <p className="mt-2">删除后无法恢复，相关更新记录也会被清除。</p>
                   </div>
                   <div className="modal-footer">
                     <button className="btn btn-ghost" onClick={() => setShowDeleteConfirm(false)}>
@@ -393,7 +392,7 @@ export default function MonitorDetail() {
                   <div className="detail-divider"></div>
                   <div className="accounts-header">
                     <h3>推送账户</h3>
-                    <Link to="/push" className="link-sm">
+                    <Link to="/notifications" className="link-sm">
                       管理账户
                     </Link>
                   </div>

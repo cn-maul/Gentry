@@ -10,7 +10,6 @@ import {
 } from '../api/monitors'
 import type { NotifyAccount, NotificationProviderMeta } from '../api/types'
 import { useToastMessages } from '../hooks/useToastMessages'
-import './PushManagement.css'
 
 interface AccountConfig {
   [key: string]: string
@@ -206,8 +205,8 @@ export default function PushManagement() {
     <div className="push-page">
       <div className="page-header">
         <div>
-          <h1>推送管理</h1>
-          <p className="page-desc">管理推送账户，每个账户可对应一个人/渠道</p>
+          <h1>推送通知</h1>
+          <p className="page-desc">配置推送渠道与全局开关；每个监控器可独立选择接收账户</p>
         </div>
         <div className="header-actions">
           <button className="btn btn-primary" onClick={openCreate}>
@@ -228,10 +227,10 @@ export default function PushManagement() {
         <div className="empty">
           <div className="empty-icon">🔔</div>
           <p>还没有推送账户</p>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: '0.25rem' }}>
+          <p className="mt-1 text-[0.8125rem] text-fg-muted">
             创建账户后，可在每个监控器中独立选择启用哪些账户
           </p>
-          <button className="btn btn-primary btn-sm" style={{ marginTop: '1rem' }} onClick={openCreate}>
+          <button className="btn btn-primary btn-sm mt-4" onClick={openCreate}>
             新增账户
           </button>
         </div>
@@ -487,7 +486,7 @@ export default function PushManagement() {
             if (e.target === e.currentTarget) setDeleteTarget(null)
           }}
         >
-          <div className="modal-container" style={{ maxWidth: '400px' }} role="dialog" aria-modal="true" aria-labelledby="account-delete-title">
+          <div className="modal-container max-w-[400px]" role="dialog" aria-modal="true" aria-labelledby="account-delete-title">
             <div className="modal-header">
               <h2 id="account-delete-title">确认删除</h2>
               <button className="modal-close" onClick={() => setDeleteTarget(null)}>
@@ -499,7 +498,7 @@ export default function PushManagement() {
             </div>
             <div className="modal-body">
               <p>确定删除推送账户「{deleteTarget.name}」吗？</p>
-              <p style={{ marginTop: '0.5rem' }}>已选择此账户的监控器将不再收到推送。</p>
+              <p className="mt-2">已选择此账户的监控器将不再收到推送。</p>
             </div>
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>

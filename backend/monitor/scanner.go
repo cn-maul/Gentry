@@ -25,6 +25,8 @@ type ContainerInfo struct {
 	SampleItems  []ExtractResult   `json:"sample_items"`
 	Config       ScanMonitorConfig `json:"config"`
 	Strategy     string            `json:"strategy,omitempty"`
+	RuleName     string            `json:"rule_name,omitempty"`
+	RuleAddress  string            `json:"rule_address,omitempty"`
 	Diagnostics  []string          `json:"diagnostics,omitempty"`
 }
 
@@ -123,8 +125,17 @@ func applyHTMLScanRule(html, pageURL string, rule htmlScanRule) ContainerInfo {
 		SampleItems:  samples,
 		Config:       config,
 		Strategy:     rule.name,
+		RuleName:     cleanScanRuleName(rule.name),
+		RuleAddress:  rule.address,
 		Diagnostics:  diagnostics,
 	}
+}
+
+// cleanScanRuleName 去除内部前缀（template_/rule_），得到面向用户的规则名。
+func cleanScanRuleName(name string) string {
+	name = strings.TrimPrefix(name, "template_")
+	name = strings.TrimPrefix(name, "rule_")
+	return name
 }
 
 // defaultScanFields 规则未定义字段时的默认提取：条目文本作标题，条目内首个链接作 URL。
@@ -154,7 +165,7 @@ func scanJSONTemplateCandidates(settings *ScanSettings, client *fetcher.Fetcher)
 		if err != nil || config.Mode != FetchModeAPIJSON {
 			continue
 		}
-		candidate, err := buildJSONScanCandidate("template_"+template.Name, config, settings.URL, template.Fields, client)
+		candidate, err := buildJSONScanCandidate("template_"+template.Name, templateDisplayAddress(template), config, settings.URL, template.Fields, client)
 		if err != nil {
 			log.Printf("[ScannerRules] JSON API 规则「%s」扫描失败: %v", template.Name, err)
 			continue
@@ -164,7 +175,7 @@ func scanJSONTemplateCandidates(settings *ScanSettings, client *fetcher.Fetcher)
 	return candidates
 }
 
-func buildJSONScanCandidate(strategy string, config FetchConfig, sourceURL string, fields []database.ScanRuleField, client *fetcher.Fetcher) (ContainerInfo, error) {
+func buildJSONScanCandidate(strategy, address string, config FetchConfig, sourceURL string, fields []database.ScanRuleField, client *fetcher.Fetcher) (ContainerInfo, error) {
 	resolved, err := ResolveFetchConfig(context.Background(), config, sourceURL, client)
 	if err != nil {
 		return ContainerInfo{}, err
@@ -188,6 +199,8 @@ func buildJSONScanCandidate(strategy string, config FetchConfig, sourceURL strin
 	return ContainerInfo{
 		ContainerCSS: config.ItemsPath, ItemCSS: "*", ItemCount: len(items),
 		SampleItems: items, Strategy: strategy,
+		RuleName:    cleanScanRuleName(strategy),
+		RuleAddress: address,
 		Diagnostics: []string{fmt.Sprintf("命中 JSON API 规则「%s」", strategy), fmt.Sprintf("JSON API 提取到 %d 个条目", len(items))},
 		Config:      ScanMonitorConfig{Container: config.ItemsPath, Item: "*", Fields: fieldConfigs, Fetch: &config},
 	}, nil

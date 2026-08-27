@@ -107,6 +107,14 @@ type ScanRuleField struct {
 	Transform string `gorm:"size:255"`
 }
 
+// Category 监控器分类（分区管理），与 Site.GroupName 一一对应。
+type Category struct {
+	ID        uint `gorm:"primarykey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Name      string `gorm:"size:100;uniqueIndex"`
+}
+
 // TableName 自定义表名
 func (Site) TableName() string                { return "sites" }
 func (SiteField) TableName() string           { return "site_fields" }
@@ -114,6 +122,7 @@ func (UpdateRecord) TableName() string        { return "update_records" }
 func (NotificationAccount) TableName() string { return "notification_accounts" }
 func (ScanRuleTemplate) TableName() string    { return "scan_rule_templates" }
 func (ScanRuleField) TableName() string       { return "scan_rule_fields" }
+func (Category) TableName() string            { return "categories" }
 
 // SystemSetting 系统设置键值对
 type SystemSetting struct {

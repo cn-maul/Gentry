@@ -1,5 +1,4 @@
 import type { MonitorFormState } from '@/lib/monitorForm'
-import './MonitorFormSummary.css'
 
 function formatInterval(s: number) {
   if (!s) return '—'

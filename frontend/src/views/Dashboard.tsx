@@ -1,20 +1,36 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { fetchMonitors, startMonitor, stopMonitor, deleteMonitor } from '../api/monitors'
-import type { Monitor } from '../api/types'
+import { fetchMonitors, fetchStats, startMonitor, stopMonitor, deleteMonitor } from '../api/monitors'
+import type { Monitor, Stats } from '../api/types'
 import MonitorCard from '../components/MonitorCard'
 import { useToastMessages } from '../hooks/useToastMessages'
 import { useResource } from '../hooks/useResource'
-import './Dashboard.css'
 
 interface MonitorOverride {
   isRunning?: boolean
   deleted?: boolean
 }
 
+function formatNum(n: number) {
+  if (n >= 10000) return (n / 10000).toFixed(1) + '万'
+  if (n >= 1000) return n.toLocaleString('zh-CN')
+  return n
+}
+
+const EMPTY_STATS: Stats = {
+  total_monitors: 0,
+  running_monitors: 0,
+  total_updates: 0,
+  updates_last_hour: 0,
+  unnotified_updates: 0,
+  pushed_today: 0,
+  total_accounts: 0,
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
   const { successMsg, pageErrorMsg, showSuccess, showError } = useToastMessages()
 
   const {
@@ -25,6 +41,42 @@ export default function Dashboard() {
     refresh,
   } = useResource<Monitor[]>(fetchMonitors, { initial: [] })
 
+  // 系统统计（15s 轮询）
+  const [stats, setStats] = useState<Stats>(EMPTY_STATS)
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null)
+  const [, setTick] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    const loadStats = async () => {
+      try {
+        const res = await fetchStats()
+        if (!cancelled && res.code === 0 && res.data) {
+          setStats((prev) => ({ ...prev, ...res.data }))
+          setLastUpdated(Date.now())
+        }
+      } catch {
+        /* 静默：保留上次数据 */
+      }
+    }
+    loadStats()
+    const statsTimer = setInterval(loadStats, 15000)
+    const tickTimer = setInterval(() => setTick((t) => t + 1), 10000)
+    return () => {
+      cancelled = true
+      clearInterval(statsTimer)
+      clearInterval(tickTimer)
+    }
+  }, [])
+
+  let lastUpdatedText = ''
+  if (lastUpdated) {
+    const diff = Math.floor((Date.now() - lastUpdated) / 1000)
+    if (diff < 10) lastUpdatedText = '刚刚更新'
+    else if (diff < 60) lastUpdatedText = `${diff}秒前更新`
+    else lastUpdatedText = `${Math.floor(diff / 60)}分钟前更新`
+  }
+
   // 乐观更新：操作成功后本地立即生效，refresh 拉到新数据后自动清除
   const [overrides, setOverrides] = useState<Record<string, MonitorOverride>>({})
   useEffect(() => {
@@ -32,9 +84,19 @@ export default function Dashboard() {
   }, [monitors])
 
   const monitorsView = useMemo(
-    () => (monitors || []).map((m) => (overrides[m.name] ? { ...m, ...overrides[m.name] } : m)).filter((m) => !overrides[m.name]?.deleted),
+    () =>
+      (monitors || [])
+        .map((m) => (overrides[m.name] ? { ...m, ...overrides[m.name] } : m))
+        .filter((m) => !overrides[m.name]?.deleted),
     [monitors, overrides],
   )
+
+  // 本地搜索：按名称 / 网址过滤
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return monitorsView
+    return monitorsView.filter((m) => m.name.toLowerCase().includes(q) || (m.url || '').toLowerCase().includes(q))
+  }, [monitorsView, query])
 
   // 目标级 pending：操作期间只禁用对应卡片的按钮，不触发全页 loading
   const [pendingNames, setPendingNames] = useState<Set<string>>(new Set())
@@ -50,7 +112,7 @@ export default function Dashboard() {
 
   const groupList = useMemo(() => {
     const map: Record<string, { name: string; items: Monitor[] }> = {}
-    for (const m of monitorsView) {
+    for (const m of filtered) {
       const g = m.group || '默认'
       if (!map[g]) map[g] = { name: g, items: [] }
       map[g].items.push(m)
@@ -61,7 +123,7 @@ export default function Dashboard() {
       return a.localeCompare(b, 'zh')
     })
     return keys.map((k) => map[k])
-  }, [monitorsView])
+  }, [filtered])
 
   useEffect(() => {
     loadData()
@@ -110,18 +172,72 @@ export default function Dashboard() {
     }
   }
 
+  const runningPercent = !stats.total_monitors ? 0 : Math.round((stats.running_monitors / stats.total_monitors) * 100)
+
   return (
     <div className="dashboard">
       <div className="page-header">
         <div>
-          <h1>监控器</h1>
-          <p className="page-desc">管理和监控网页内容变更</p>
+          <h1>监控总览</h1>
+          <p className="page-desc">
+            管理和监控网页内容变更
+            {lastUpdatedText && (
+              <>
+                {' · '}
+                <span className="text-[0.75rem] text-fg-muted">{lastUpdatedText}</span>
+              </>
+            )}
+          </p>
         </div>
         <div className="header-actions">
           <Link to="/add" className="btn btn-primary">
             新增监控器
           </Link>
         </div>
+      </div>
+
+      <div className="stats-strip">
+        <div className="stat-cell">
+          <span className="stat-label">运行中监控</span>
+          <span className="stat-num">
+            {stats.running_monitors}
+            <span className="align-baseline text-[0.85em] font-semibold text-fg-muted"> / {stats.total_monitors}</span>
+          </span>
+          <div className="stat-progress">
+            <div className="stat-progress-fill" style={{ width: `${runningPercent}%` }} />
+          </div>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">今日推送</span>
+          <span className="stat-num accent">{formatNum(stats.pushed_today)}</span>
+          <span className="stat-sub">累计 {formatNum(stats.total_updates)} 条变更</span>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">待推送更新</span>
+          <span className={`stat-num${stats.unnotified_updates > 0 ? ' warn' : ''}`}>{stats.unnotified_updates}</span>
+          <span className="stat-sub">近 1 小时更新 {stats.updates_last_hour} 条</span>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">推送账户</span>
+          <span className="stat-num">{stats.total_accounts}</span>
+          <span className="stat-sub">渠道就绪状态随时可调整</span>
+        </div>
+      </div>
+
+      <div className="dashboard-toolbar">
+        <div className="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            className="form-input"
+            placeholder="搜索监控名称或网址..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+        <div className="toolbar-spacer" />
       </div>
 
       {successMsg && <div className="toast toast-success">{successMsg}</div>}
@@ -136,8 +252,8 @@ export default function Dashboard() {
         <div className="empty">
           <div className="empty-icon">❌</div>
           <p>加载失败</p>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: '0.25rem' }}>{error}</p>
-          <button className="btn btn-primary btn-sm" style={{ marginTop: '1rem' }} onClick={loadData}>
+          <p className="mt-1 text-[0.8125rem] text-fg-muted">{error}</p>
+          <button className="btn btn-primary btn-sm mt-4" onClick={loadData}>
             重试
           </button>
         </div>
@@ -145,8 +261,8 @@ export default function Dashboard() {
         <div className="empty">
           <div className="empty-icon">📡</div>
           <p className="empty-title">还没有监控任务</p>
-          <p className="empty-desc">粘贴网址创建监控；内容区域由已保存的扫描规则识别，可在「高级规则」中维护</p>
-          <Link to="/add" className="btn btn-primary" style={{ marginTop: '1.25rem' }}>
+          <p className="empty-desc">粘贴网址创建监控；内容区域由已保存的扫描规则识别，可在「规则库」中维护</p>
+          <Link to="/add" className="btn btn-primary mt-5">
             创建第一个监控
           </Link>
           <div className="empty-hints">
@@ -156,6 +272,15 @@ export default function Dashboard() {
             <span className="hint-dot" />
             <span>多渠道推送</span>
           </div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="empty">
+          <div className="empty-icon">🔍</div>
+          <p className="empty-title">没有匹配的监控器</p>
+          <p className="empty-desc">换个关键词试试，或清空搜索</p>
+          <button className="btn btn-ghost btn-sm mt-4" onClick={() => setQuery('')}>
+            清空搜索
+          </button>
         </div>
       ) : (
         groupList.map((group) => (
@@ -202,7 +327,7 @@ export default function Dashboard() {
             </div>
             <div className="modal-body">
               <p>确定要删除监控器「{deleteTarget}」吗？</p>
-              <p style={{ marginTop: '0.5rem' }}>删除后无法恢复。</p>
+              <p className="mt-2">删除后无法恢复。</p>
             </div>
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>

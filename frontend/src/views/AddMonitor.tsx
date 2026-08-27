@@ -5,10 +5,10 @@ import {
   updateMonitor,
   fetchMonitorConfig,
   fetchAccounts,
-  quickCreateScanRule,
+  fetchCategories,
   validateMonitorConfig,
 } from '../api/monitors'
-import type { NotifyAccount, ValidationResult } from '../api/types'
+import type { Category, NotifyAccount, ValidationResult } from '../api/types'
 import MonitorForm from '../components/monitor/form/MonitorForm'
 import {
   createEmptyForm,
@@ -18,17 +18,15 @@ import {
   validateForm,
   getDetectionFingerprint,
   suggestMonitorName,
-  suggestedScanRuleScope,
 } from '../lib/monitorForm'
 import type { MonitorFormState } from '../lib/monitorForm'
 import { useToastMessages } from '../hooks/useToastMessages'
-import './AddMonitor.css'
 
 export default function AddMonitor() {
   const navigate = useNavigate()
   const { name: routeName } = useParams()
   const isEdit = !!routeName
-  const { successMsg, pageErrorMsg, showSuccess, showError } = useToastMessages()
+  const { successMsg, pageErrorMsg } = useToastMessages()
 
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -38,6 +36,7 @@ export default function AddMonitor() {
   const [originalFormSnapshot, setOriginalFormSnapshot] = useState<MonitorFormState | null>(null)
 
   const [accounts, setAccounts] = useState<NotifyAccount[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
 
   // Validation
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
@@ -76,13 +75,20 @@ export default function AddMonitor() {
     })
   }, [requestFingerprint])
 
-  // Load accounts and edit data
+  // Load accounts, categories and edit data
   useEffect(() => {
     let cancelled = false
     async function load() {
       try {
         const acctRes = await fetchAccounts()
         if (!cancelled) setAccounts((acctRes.code === 0 ? acctRes.data : []) || [])
+      } catch {
+        /* ignore */
+      }
+
+      try {
+        const catRes = await fetchCategories()
+        if (!cancelled) setCategories((catRes.code === 0 ? catRes.data : []) || [])
       } catch {
         /* ignore */
       }
@@ -179,51 +185,6 @@ export default function AddMonitor() {
     }
   }
 
-  async function handleSaveAsRule() {
-    const target = currentFormWithEnsuredName(form)
-    setForm(target)
-    if (!target.extraction.containerSelector) return
-    const name = prompt('规则名称（如 公告列表）', target.basic.name.trim() + ' 规则')
-    if (!name) return
-    try {
-      await quickCreateScanRule({
-        name,
-        url: target.basic.url,
-        scope_type: suggestedScanRuleScope(),
-        config: {
-          container: target.extraction.containerSelector,
-          item: target.extraction.itemSelector,
-          fetch_config:
-            target.extraction.sourceMode === 'api_json'
-              ? {
-                  mode: 'api_json',
-                  url: target.extraction.sourceUrl,
-                  items_path: target.extraction.itemsPath,
-                  filter_path: target.extraction.filterPath,
-                  filter_equals: String(target.extraction.filterEquals ?? ''),
-                  headers: target.extraction.sourceHeaders || {},
-                  ...(Object.keys(target.extraction.sourceVariables || {}).length
-                    ? { variables: target.extraction.sourceVariables }
-                    : {}),
-                }
-              : undefined,
-          fields: target.extraction.fields
-            .filter((f) => f.name)
-            .map((f) => ({
-              name: f.name,
-              selector: f.selector,
-              type: f.type,
-              attr: f.attr || '',
-              transform: f.transform || '',
-            })),
-        },
-      })
-      showSuccess('规则已保存')
-    } catch (e) {
-      showError('保存规则失败: ' + (e instanceof Error ? e.message : ''))
-    }
-  }
-
   return (
     <div className="add-monitor">
       <div className="page-header">
@@ -247,24 +208,13 @@ export default function AddMonitor() {
         <MonitorForm
           form={form}
           accounts={accounts}
+          groups={categories.map((c) => c.name)}
           error={submitError}
           validationResult={validationResult}
           validationLoading={validationLoading}
           showBaselineWarning={baselineWarning}
           onValidate={runValidation}
           onUpdateForm={(newForm) => setForm(newForm)}
-          advancedActions={
-            !isEdit ? (
-              <button
-                className="btn btn-ghost btn-sm"
-                type="button"
-                onClick={handleSaveAsRule}
-                disabled={submitting}
-              >
-                另存为扫描规则
-              </button>
-            ) : undefined
-          }
           actions={
             <button className="btn btn-primary" disabled={submitting} onClick={handleSubmit}>
               {submitting ? '提交中...' : isEdit ? '保存修改' : form.basic.isActive ? '创建并启动' : '仅创建'}

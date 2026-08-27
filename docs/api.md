@@ -18,11 +18,11 @@ Authorization: Bearer <token>
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `GET` | `/api/health` | 健康检查 |
-| `GET` | `/api/stats` | 系统统计 |
-| `GET` | `/api/groups` | 监控分组 |
-| `GET` | `/api/settings/notifications` | 获取全局通知设置 |
-| `PUT` | `/api/settings/notifications` | 更新全局通知设置 |
+| `GET` | `/api/v1/health` | 健康检查 |
+| `GET` | `/api/v1/stats` | 系统统计 |
+| `GET` | `/api/v1/groups` | 监控分组 |
+| `GET` | `/api/v1/settings/notifications` | 获取全局通知设置 |
+| `PUT` | `/api/v1/settings/notifications` | 更新全局通知设置 |
 
 ## 监控器接口
 
@@ -50,6 +50,17 @@ Authorization: Bearer <token>
 | --- | --- | --- |
 | `POST` | `/api/v1/monitors/validate` | 抓取并验证监控配置，不写入基线 |
 | `POST` | `/api/v1/monitors/preview` | 按已保存扫描规则识别网页内容结构 |
+| `POST` | `/api/v1/settings/scan-rules/capture` | 规则捕获：按 URL + 关键词产出候选规则草稿（LLM 提案 + 本地验证），草稿需人工确认后保存 |
+| `POST` | `/api/v1/settings/scan-rules/test-draft` | 草稿直测：不落库按选择器配置执行一次只读提取 |
+
+`capture` 请求体为 `{"url": "...", "keywords": "公告,公示"}`（keywords 可省略）。
+返回 `config`（container/item/fields 候选）、`samples` 样本、`verified` 是否通过关键词验证、
+`message` 说明，以及 `diagnostics`（尝试次数、每轮失败原因、关键词命中数、条目数）。
+验证失败会携带具体错误自动反馈重试一次；鉴权类错误立即返回。
+需要在「设置」页完成 AI 模型接入配置。
+
+`test-draft` 请求体为 `{"url", "container", "item", "fields", "fetch_config"?}`，
+响应结构与 `/monitors/validate` 一致。
 
 `preview` 请求体只需要 `url`。返回命中规则的候选列表（含样本条目与可保存的监控配置）；未命中规则时返回空列表。
 
@@ -57,33 +68,33 @@ Authorization: Bearer <token>
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `GET` | `/api/settings/notification-accounts` | 获取通知账户 |
-| `POST` | `/api/settings/notification-accounts` | 创建通知账户 |
-| `PUT` | `/api/settings/notification-accounts/:id` | 更新通知账户 |
-| `DELETE` | `/api/settings/notification-accounts/:id` | 删除通知账户 |
-| `GET` | `/api/settings/notification-providers` | 获取通知服务元数据 |
+| `GET` | `/api/v1/settings/notification-accounts` | 获取通知账户 |
+| `POST` | `/api/v1/settings/notification-accounts` | 创建通知账户 |
+| `PUT` | `/api/v1/settings/notification-accounts/:id` | 更新通知账户 |
+| `DELETE` | `/api/v1/settings/notification-accounts/:id` | 删除通知账户 |
+| `GET` | `/api/v1/settings/notification-providers` | 获取通知服务元数据 |
 
 ## 扫描规则模板
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `GET` | `/api/settings/scan-rules` | 获取模板列表 |
-| `POST` | `/api/settings/scan-rules/quick` | 根据提取配置快速保存规则 |
-| `GET` | `/api/settings/scan-rules/export` | 导出版本化规则 JSON |
-| `POST` | `/api/settings/scan-rules/import` | 导入规则 JSON；同名规则跳过 |
-| `POST` | `/api/settings/scan-rules` | 创建模板 |
-| `PUT` | `/api/settings/scan-rules/:id` | 更新模板 |
-| `DELETE` | `/api/settings/scan-rules/:id` | 删除模板 |
-| `POST` | `/api/settings/scan-rules/:id/test` | 测试模板 |
-| `POST` | `/api/settings/scan-rules/ai-extract` | AI 提取规则：抓取页面，让 AI 识别内容列表结构并本地验证 |
+| `GET` | `/api/v1/settings/scan-rules` | 获取模板列表 |
+| `POST` | `/api/v1/settings/scan-rules/quick` | 根据提取配置快速保存规则 |
+| `GET` | `/api/v1/settings/scan-rules/export` | 导出版本化规则 JSON |
+| `POST` | `/api/v1/settings/scan-rules/import` | 导入规则 JSON；同名规则跳过 |
+| `POST` | `/api/v1/settings/scan-rules` | 创建模板 |
+| `PUT` | `/api/v1/settings/scan-rules/:id` | 更新模板 |
+| `DELETE` | `/api/v1/settings/scan-rules/:id` | 删除模板 |
+| `POST` | `/api/v1/settings/scan-rules/:id/test` | 测试模板 |
+| `POST` | `/api/v1/settings/scan-rules/ai-extract` | AI 提取规则：抓取页面，让 AI 识别内容列表结构并本地验证 |
 
 ## AI 模型接入
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `GET` | `/api/settings/llm` | 获取接入配置（api_key 脱敏返回） |
-| `PUT` | `/api/settings/llm` | 保存接入配置；api_key 传回脱敏值时保留原密钥 |
-| `POST` | `/api/settings/llm/test` | 向已配置模型发送一次最小对话验证连通 |
+| `GET` | `/api/v1/settings/llm` | 获取接入配置（api_key 脱敏返回） |
+| `PUT` | `/api/v1/settings/llm` | 保存接入配置；api_key 传回脱敏值时保留原密钥 |
+| `POST` | `/api/v1/settings/llm/test` | 向已配置模型发送一次最小对话验证连通 |
 
 配置为 OpenAI 兼容接口（Base URL + API Key + 模型名称），支持 DeepSeek、通义千问、Moonshot、OpenAI、Ollama 等。
 

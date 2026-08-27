@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchVersion, checkUpdate, applyUpdate, fetchUpdateStatus } from '../api/monitors'
-import './UpdatePanel.css'
 
 type PanelState = 'idle' | 'checking' | 'available' | 'uptodate' | 'error' | 'downloading' | 'restarting' | 'failed'
 
@@ -134,32 +133,32 @@ export default function UpdatePanel() {
 
   return (
     <div className="update-panel">
-      <button
-        className="version-btn"
-        disabled={state === 'checking' || state === 'downloading' || state === 'restarting'}
-        onClick={handleClick}
-      >
-        {state === 'idle' && <span>{version}</span>}
-        {state === 'checking' && <span>检查中...</span>}
-        {state === 'uptodate' && <span>已是最新</span>}
-        {state === 'error' && <span>检查失败</span>}
-        {state === 'downloading' && <span>下载更新中...</span>}
-        {state === 'restarting' && <span>即将重启...</span>}
-        {state === 'failed' && <span>{errorMsg || '更新失败'}</span>}
-      </button>
+      <div className="version-row">
+        <span>当前版本</span>
+        <span className="version-current">{version || '—'}</span>
+      </div>
 
-      {state === 'available' && (
-        <div className="update-actions">
-          <button className="update-btn" onClick={handleUpdate}>
-            升级到 {latestVersion}
-          </button>
-        </div>
+      {state === 'available' ? (
+        <button className="update-btn" onClick={handleUpdate}>
+          升级到 {latestVersion}
+        </button>
+      ) : (
+        <button
+          className="version-btn"
+          disabled={state === 'checking' || state === 'downloading' || state === 'restarting'}
+          onClick={handleClick}
+        >
+          {state === 'idle' && <span>检查更新</span>}
+          {state === 'checking' && <span>检查中...</span>}
+          {state === 'uptodate' && <span>已是最新版本</span>}
+          {state === 'error' && <span>检查失败，点击重试</span>}
+          {state === 'restarting' && <span>服务重启中...</span>}
+          {state === 'failed' && <span>{errorMsg || '更新失败，点击重试'}</span>}
+        </button>
       )}
       {state === 'downloading' && (
-        <div className="update-actions">
-          <div className="progress-bar">
-            <div className="progress-fill fill-anim" />
-          </div>
+        <div className="progress-bar">
+          <div className="progress-fill fill-anim" />
         </div>
       )}
     </div>

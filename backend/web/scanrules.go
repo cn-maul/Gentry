@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"github.com/andybalholm/cascadia"
 	"github.com/cn-maul/Gentry/database"
 	"github.com/cn-maul/Gentry/fetcher"
+	"github.com/cn-maul/Gentry/llm"
 	"github.com/cn-maul/Gentry/monitor"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -43,20 +45,20 @@ type quickScanRuleRequest struct {
 }
 
 type scanRuleImportRequest struct {
-	Name        string         `json:"name"`
-	URLContains string         `json:"url_contains"`
-	SourceURL   string         `json:"source_url"`
-	ScopeType   string         `json:"scope_type"`
-	MatchHost   string         `json:"match_host"`
-	MatchPath   string         `json:"match_path"`
-	MatchQuery  string         `json:"match_query"`
-	Container   string         `json:"container"`
-	Item        string         `json:"item"`
-	Priority    int            `json:"priority"`
-	Enabled     *bool          `json:"enabled"`
-	Description string         `json:"description"`
+	Name        string          `json:"name"`
+	URLContains string          `json:"url_contains"`
+	SourceURL   string          `json:"source_url"`
+	ScopeType   string          `json:"scope_type"`
+	MatchHost   string          `json:"match_host"`
+	MatchPath   string          `json:"match_path"`
+	MatchQuery  string          `json:"match_query"`
+	Container   string          `json:"container"`
+	Item        string          `json:"item"`
+	Priority    int             `json:"priority"`
+	Enabled     *bool           `json:"enabled"`
+	Description string          `json:"description"`
 	FetchConfig json.RawMessage `json:"fetch_config"`
-	Fields      []fieldRequest `json:"fields"`
+	Fields      []fieldRequest  `json:"fields"`
 }
 
 type scanRuleResponse struct {
@@ -726,4 +728,104 @@ func testScanRuleHTML(c *gin.Context, testURL string, rule *database.ScanRuleTem
 func parseUintParam(raw string) uint {
 	id, _ := strconv.ParseUint(raw, 10, 64)
 	return uint(id)
+}
+
+// captureScanRule 统一捕获端点：给定页面 URL 与关键词，返回候选规则草稿
+// （选择器 + 样本 + 诊断信息）。草稿不会自动入库，由用户确认后走 quickCreate。
+func captureScanRule(c *gin.Context) {
+	var req struct {
+		URL      string `json:"url" binding:"required"`
+		Keywords string `json:"keywords"`
+	}
+	if !bindJSON(c, &req) {
+		return
+	}
+	if err := validateOutboundURL(req.URL); err != nil {
+		fail(c, http.StatusBadRequest, "URL 无效: "+err.Error())
+		return
+	}
+
+	result, err := monitor.RunCapture(c.Request.Context(), monitor.CaptureRequest{
+		URL:      req.URL,
+		Keywords: splitKeywords(req.Keywords),
+	})
+	if err != nil {
+		status := http.StatusInternalServerError
+		switch {
+		case errors.Is(err, llm.ErrNotConfigured) || llm.IsFatal(err):
+			// 配置缺失或鉴权失败：客户端可修复，返回 400 与明确原因
+			status = http.StatusBadRequest
+		case strings.Contains(err.Error(), "抓取页面失败"):
+			status = http.StatusBadGateway
+		case strings.Contains(err.Error(), "未能生成可用的选择器"):
+			status = http.StatusBadRequest
+		}
+		fail(c, status, err.Error())
+		return
+	}
+	ok(c, result)
+}
+
+// testDraftMonitor 草稿直测：在不落库的情况下按候选/手填的选择器配置
+// 执行一次只读提取，返回与 /monitors/validate 相同结构的验证报告。
+// 替代前端「拼假监控请求」的旧测试方式。
+func testDraftMonitor(c *gin.Context) {
+	var req struct {
+		URL         string          `json:"url" binding:"required"`
+		Container   string          `json:"container" binding:"required"`
+		Item        string          `json:"item"`
+		Fields      []fieldRequest  `json:"fields"`
+		FetchConfig json.RawMessage `json:"fetch_config"`
+	}
+	if !bindJSON(c, &req) {
+		return
+	}
+	if err := validateOutboundURL(req.URL); err != nil {
+		fail(c, http.StatusBadRequest, "URL 无效: "+err.Error())
+		return
+	}
+
+	site := &database.Site{
+		URL:       req.URL,
+		Container: req.Container,
+		Item:      req.Item,
+		FetchConfig: func() string {
+			if len(req.FetchConfig) > 0 && string(req.FetchConfig) != "null" {
+				return string(req.FetchConfig)
+			}
+			return ""
+		}(),
+		Fields: siteFieldsFromFieldRequests(req.Fields),
+	}
+	if len(site.Fields) == 0 {
+		site.Fields = []database.SiteField{{Name: "title", Selector: "", Type: "text"}}
+	}
+	if err := monitor.NormalizeAndValidateSiteDefinition(site); err != nil {
+		fail(c, http.StatusBadRequest, "invalid draft config: "+err.Error())
+		return
+	}
+	if err := validateMonitorSourceURL(site); err != nil {
+		fail(c, http.StatusBadRequest, "invalid draft source: "+err.Error())
+		return
+	}
+	report, err := monitor.ValidateExtraction(c.Request.Context(), site)
+	if err != nil {
+		fail(c, http.StatusBadRequest, "config validation failed: "+err.Error())
+		return
+	}
+	ok(c, gin.H{
+		"valid":           true,
+		"status":          "valid",
+		"extracted_items": report.ExtractedItems,
+		"items": []gin.H{
+			{
+				"status":  "ok",
+				"label":   "条目提取",
+				"detail":  fmt.Sprintf("成功提取并验证 %d 条记录", report.ExtractedItems),
+				"samples": report.Samples,
+			},
+		},
+		"errors":  []string{},
+		"summary": fmt.Sprintf("配置有效，共提取 %d 条记录；本次验证未写入基线或发送通知。", report.ExtractedItems),
+	})
 }

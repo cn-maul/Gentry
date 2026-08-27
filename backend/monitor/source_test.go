@@ -211,7 +211,7 @@ func TestJSONScanCandidateIncludesEveryExtractedPrice(t *testing.T) {
 	}))
 	defer server.Close()
 	candidate, err := buildJSONScanCandidate(
-		"test", FetchConfig{Mode: FetchModeAPIJSON, URL: server.URL, ItemsPath: "data"},
+		"test", "", FetchConfig{Mode: FetchModeAPIJSON, URL: server.URL, ItemsPath: "data"},
 		"https://shop.example/products/item",
 		[]database.ScanRuleField{{Name: "sku", Selector: "sku"}, {Name: "price", Selector: "price"}},
 		fetcher.New(),

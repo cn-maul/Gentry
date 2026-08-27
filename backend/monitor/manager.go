@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -15,19 +16,27 @@ var (
 	monitorsLock sync.RWMutex
 )
 
+// durationSeconds 按「秒」序列化的时长：time.Duration 默认输出纳秒，
+// 而前端一律把 check_interval 当作秒处理，避免 3600 秒被显示成 1000000000 小时。
+type durationSeconds time.Duration
+
+func (d durationSeconds) MarshalJSON() ([]byte, error) {
+	return json.Marshal(int64(time.Duration(d) / time.Second))
+}
+
 type MonitorStatus struct {
-	Name           string        `json:"name"`
-	URL            string        `json:"url"`
-	Group          string        `json:"group"`
-	IsRunning      bool          `json:"is_running"`
-	LastCheck      time.Time     `json:"last_check"`
-	LastDuration   time.Duration `json:"last_duration"`
-	LastError      string        `json:"last_error,omitempty"`
-	LastUpdate     time.Time     `json:"last_update,omitempty"`
-	UpdatesCount   int           `json:"updates_count"`
-	NextCheck      time.Time     `json:"next_check"`
-	CheckInterval  time.Duration `json:"check_interval"`
-	BaselineStatus string        `json:"baseline_status,omitempty"`
+	Name           string          `json:"name"`
+	URL            string          `json:"url"`
+	Group          string          `json:"group"`
+	IsRunning      bool            `json:"is_running"`
+	LastCheck      time.Time       `json:"last_check"`
+	LastDuration   time.Duration   `json:"last_duration"`
+	LastError      string          `json:"last_error,omitempty"`
+	LastUpdate     time.Time       `json:"last_update,omitempty"`
+	UpdatesCount   int             `json:"updates_count"`
+	NextCheck      time.Time       `json:"next_check"`
+	CheckInterval  durationSeconds `json:"check_interval"`
+	BaselineStatus string          `json:"baseline_status,omitempty"`
 }
 
 // AtomicReplaceMonitor 原子式替换监控器：停止旧实例 → 注销旧名 → 创建新实例 → 启动/停止

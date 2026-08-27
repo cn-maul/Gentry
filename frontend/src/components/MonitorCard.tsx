@@ -25,10 +25,9 @@ export default function MonitorCard({ monitor, pending = false, onStart, onStop,
   const isError = !!monitor.last_error
   const statusText = isError ? 'error' : isRunning ? 'running' : 'stopped'
 
-  const cardBase = 'group flex cursor-pointer select-none items-center gap-4 rounded-lg px-4 py-3 transition max-md:flex-wrap max-md:gap-2'
-  const cardBg = isError
-    ? 'bg-[rgba(243,114,127,0.06)] hover:bg-[rgba(243,114,127,0.1)]'
-    : 'bg-card hover:bg-hover'
+  const cardBase =
+    'group flex cursor-pointer select-none items-center gap-4 rounded-lg border border-line px-4 py-3 transition hover:border-fg-muted hover:shadow-md max-md:flex-wrap max-md:gap-2'
+  const cardBg = isError ? 'bg-error-card hover:bg-error-card-hover' : 'bg-card hover:bg-hover'
   const cardStopped = !isRunning ? 'opacity-55' : ''
 
   const iconBtn =
@@ -69,7 +68,7 @@ export default function MonitorCard({ monitor, pending = false, onStart, onStop,
       >
         <button
           className={`flex h-9 w-9 items-center justify-center rounded-full border-none p-0 transition disabled:pointer-events-none disabled:opacity-40 ${
-            isRunning ? 'bg-elevated text-fg hover:scale-[1.08] hover:bg-hover' : 'bg-brand text-black hover:scale-[1.08] hover:bg-brand-hover'
+            isRunning ? 'bg-elevated text-fg hover:scale-[1.08] hover:bg-hover' : 'bg-brand text-[color:var(--brand-contrast)] hover:scale-[1.08] hover:bg-brand-hover'
           }`}
           disabled={pending}
           onClick={() => (isRunning ? onStop() : onStart())}

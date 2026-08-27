@@ -69,6 +69,8 @@ export interface ScanContainer {
   item_css?: string
   item_count: number
   strategy?: string
+  rule_name?: string
+  rule_address?: string
   diagnostics?: string[]
   sample_items?: Array<{
     title?: string
@@ -85,6 +87,12 @@ export interface ScanContainer {
 
 export interface ScanPreviewResult {
   containers?: ScanContainer[]
+}
+
+/** 监控器分类 */
+export interface Category {
+  id: number
+  name: string
 }
 
 /** 配置验证 */
@@ -196,8 +204,16 @@ export interface LLMConnectionTestResult {
   answer?: string
 }
 
-/** AI 规则提取结果 */
-export interface AIExtractResult {
+/** 捕获管线诊断信息：记录尝试次数、失败原因与关键词命中 */
+export interface CaptureDiagnostics {
+  attempts: number
+  failures?: string[]
+  keyword_hits: number
+  item_count: number
+}
+
+/** 规则捕获结果（统一捕获管线产物，草稿需人工确认后保存） */
+export interface CaptureResult {
   config: {
     container?: string
     item?: string
@@ -210,4 +226,5 @@ export interface AIExtractResult {
   }>
   verified: boolean
   message: string
+  diagnostics?: CaptureDiagnostics
 }

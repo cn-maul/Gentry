@@ -1,23 +1,25 @@
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import type { ReactNode } from 'react'
 import type { MonitorFormState } from '@/lib/monitorForm'
-import type { NotifyAccount, ValidationResult } from '@/api/types'
+import type { NotifyAccount, ScanContainer, ValidationResult } from '@/api/types'
+import { previewScan } from '@/api/monitors'
 import BasicMonitorForm from './BasicMonitorForm'
-import ExtractionEditor from './ExtractionEditor'
+import RuleMatchPanel from './RuleMatchPanel'
 import NotificationEditor from './NotificationEditor'
 import MonitorValidationPanel from './MonitorValidationPanel'
 import MonitorFormSummary from './MonitorFormSummary'
-import './MonitorForm.css'
 
 interface MonitorFormProps {
   form: MonitorFormState
   accounts?: NotifyAccount[]
+  /** 可选分类（来自设置 → 分类管理），高级设置中以下拉选择 */
+  groups?: string[]
   error?: string | null
   validationResult?: ValidationResult | null
   validationLoading?: boolean
   showBaselineWarning?: boolean
   actions?: ReactNode
-  advancedActions?: ReactNode
   onUpdateForm: (form: MonitorFormState) => void
   onValidate: () => void
 }
@@ -25,16 +27,94 @@ interface MonitorFormProps {
 export default function MonitorForm({
   form,
   accounts = [],
+  groups = [],
   error,
   validationResult,
   validationLoading = false,
   showBaselineWarning = false,
   actions,
-  advancedActions,
   onUpdateForm,
   onValidate,
 }: MonitorFormProps) {
   const hasNotification = form.notification.accountIds.length > 0
+
+  // ===== 匹配规则状态 =====
+  const [matching, setMatching] = useState(false)
+  const [matchResult, setMatchResult] = useState<{ containers?: ScanContainer[] } | null>(null)
+  const [matched, setMatched] = useState(false)
+  const [matchError, setMatchError] = useState<string | null>(null)
+  const [appliedIndex, setAppliedIndex] = useState<number | null>(null)
+
+  // 使用 ref 取最新表单，避免覆盖匹配期间的用户编辑
+  const formRef = useRef(form)
+  formRef.current = form
+
+  // URL 变化时只重置匹配状态，不清空已加载的提取配置（编辑模式保留原配置）
+  const lastUrl = useRef(form.basic.url)
+  useEffect(() => {
+    if (lastUrl.current !== form.basic.url) {
+      lastUrl.current = form.basic.url
+      setMatchResult(null)
+      setMatched(false)
+      setMatchError(null)
+      setAppliedIndex(null)
+    }
+  }, [form.basic.url])
+
+  async function handleMatch() {
+    if (matching || !form.basic.url.trim()) return
+    setMatching(true)
+    setMatched(false)
+    setMatchError(null)
+    setAppliedIndex(null)
+    try {
+      const res = await previewScan({ url: form.basic.url.trim() })
+      if (res.code === 0 && res.data) {
+        setMatchResult(res.data)
+        setMatched(true)
+      } else {
+        setMatchError(res.message || '匹配失败')
+      }
+    } catch (e) {
+      setMatchError(e instanceof Error ? e.message : '匹配失败')
+    }
+    setMatching(false)
+  }
+
+  function applyCandidate(container: ScanContainer, index: number) {
+    const current = formRef.current
+    const config = container.config || {}
+    const fields = (config.fields || []).map((f) => ({
+      name: f.name || '',
+      selector: f.selector || '',
+      type: f.type || 'text',
+      attr: f.attr || '',
+      transform: f.transform || '',
+    }))
+    const extracted: MonitorFormState['extraction'] = {
+      ...current.extraction,
+      containerSelector: config.container || container.container_css || '',
+      itemSelector: config.item || container.item_css || '',
+    }
+    if (config.fetch_config) {
+      extracted.sourceMode = (config.fetch_config.mode as MonitorFormState['extraction']['sourceMode']) || 'html'
+      extracted.sourceUrl = config.fetch_config.url || ''
+      extracted.itemsPath = config.fetch_config.items_path || ''
+      extracted.filterPath = config.fetch_config.filter_path || ''
+      extracted.filterEquals = config.fetch_config.filter_equals ?? ''
+      extracted.sourceHeaders = config.fetch_config.headers || {}
+    } else {
+      extracted.sourceMode = 'html'
+      extracted.sourceUrl = ''
+      extracted.itemsPath = ''
+      extracted.filterPath = ''
+      extracted.filterEquals = ''
+      extracted.sourceHeaders = {}
+    }
+    if (fields.length > 0) extracted.fields = fields
+    onUpdateForm({ ...current, extraction: extracted })
+    setAppliedIndex(index)
+  }
 
   let currentStep = 1
   if (form.basic.url) {
@@ -51,7 +131,7 @@ export default function MonitorForm({
         <div className={`step-line${currentStep > 1 ? ' done' : ''}`} />
         <div className={`step${currentStep === 2 ? ' active' : ''}${currentStep > 2 ? ' done' : ''}`}>
           <span className="step-num">2</span>
-          <span className="step-text">确认内容</span>
+          <span className="step-text">匹配规则</span>
         </div>
         <div className={`step-line${currentStep > 2 ? ' done' : ''}`} />
         <div className={`step${currentStep === 3 ? ' active' : ''}`}>
@@ -60,12 +140,22 @@ export default function MonitorForm({
         </div>
       </div>
 
-      <BasicMonitorForm value={form.basic} onChange={(basic) => onUpdateForm({ ...form, basic })} />
+      <BasicMonitorForm
+        value={form.basic}
+        matching={matching}
+        onMatchRule={handleMatch}
+        onChange={(basic) => onUpdateForm({ ...form, basic })}
+      />
 
-      <ExtractionEditor
-        value={form.extraction}
+      <RuleMatchPanel
         url={form.basic.url}
-        onChange={(extraction) => onUpdateForm({ ...form, extraction })}
+        matching={matching}
+        matched={matched}
+        result={matchResult}
+        matchError={matchError}
+        appliedIndex={appliedIndex}
+        onApply={applyCandidate}
+        onDismiss={() => setMatched(false)}
       />
 
       <MonitorValidationPanel result={validationResult} loading={validationLoading} />
@@ -74,7 +164,7 @@ export default function MonitorForm({
         <summary>
           <span>
             <strong>高级设置</strong>
-            <small>通知、检查频率和提取规则</small>
+            <small>通知、检查频率和分类</small>
           </span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <polyline points="9 18 15 12 9 6" />
@@ -82,14 +172,7 @@ export default function MonitorForm({
         </summary>
 
         <div className="advanced-content">
-          <BasicMonitorForm value={form.basic} advanced onChange={(basic) => onUpdateForm({ ...form, basic })} />
-
-          <ExtractionEditor
-            value={form.extraction}
-            url={form.basic.url}
-            advanced
-            onChange={(extraction) => onUpdateForm({ ...form, extraction })}
-          />
+          <BasicMonitorForm value={form.basic} advanced groups={groups} onChange={(basic) => onUpdateForm({ ...form, basic })} />
 
           <NotificationEditor
             value={form.notification}
@@ -108,9 +191,20 @@ export default function MonitorForm({
           </div>
 
           <MonitorFormSummary form={form} />
-          {advancedActions && <div className="advanced-actions">{advancedActions}</div>}
         </div>
       </details>
+
+      <div className="form-group monitor-name-option">
+        <label>
+          监控名称 <span>可选</span>
+        </label>
+        <input
+          value={form.basic.name}
+          onChange={(e) => onUpdateForm({ ...form, basic: { ...form.basic, name: e.target.value } })}
+          className="form-input"
+          placeholder="留空将自动使用网站名称"
+        />
+      </div>
 
       <div className="start-option">
         <label className="checkbox-label">
@@ -133,7 +227,7 @@ export default function MonitorForm({
         ) : (
           <>
             <span>未配置通知，仅记录变化不发送提醒</span>
-            <Link to="/push" className="btn btn-ghost btn-sm">
+            <Link to="/notifications" className="btn btn-ghost btn-sm">
               添加通知方式
             </Link>
           </>

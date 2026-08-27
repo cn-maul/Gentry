@@ -108,10 +108,6 @@ export function suggestMonitorName(url: string) {
   }
 }
 
-export function suggestedScanRuleScope() {
-  return 'exact'
-}
-
 export function toMonitorRequest(form: MonitorFormState): MonitorRequest {
   const payload: MonitorRequest = {
     name: form.basic.name.trim(),
@@ -258,7 +254,9 @@ export function validateForm(form: MonitorFormState): string | null {
   if (!Number.isFinite(Number(form.basic.interval)) || Number(form.basic.interval) < 10) {
     return '检查间隔不能小于 10 秒'
   }
-  if (!form.extraction.containerSelector.trim()) return '容器选择器不能为空'
+  if (!form.extraction.containerSelector.trim()) {
+    return '还没有匹配到规则：请点击上方「匹配规则」识别内容区域，或先去「规则库」添加规则'
+  }
   if (form.extraction.sourceMode === 'api_json') {
     const sourceUrl = form.extraction.sourceUrl.trim().replace(/\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}/g, 'value')
     try {

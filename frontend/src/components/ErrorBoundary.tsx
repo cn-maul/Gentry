@@ -18,8 +18,8 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, Er
       <div className="empty" role="alert">
         <div className="empty-icon">💥</div>
         <p>页面渲染出错了</p>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>{this.state.error.message}</p>
-        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+        <p className="text-[0.8125rem] text-fg-muted">{this.state.error.message}</p>
+        <div className="mt-4 flex justify-center gap-2">
           <button
             className="btn btn-primary btn-sm"
             onClick={() => {

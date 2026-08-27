@@ -16,12 +16,91 @@ import (
 
 // htmlScanRule 是一条可对 HTML 页面应用的扫描规则（数据库模板或外部规则文件）。
 type htmlScanRule struct {
-	name       string
-	container  string
-	item       string
-	priority   int
-	fields     []database.ScanRuleField
-	matchesURL func(string) bool
+	name      string
+	address   string
+	container string
+	item      string
+	priority  int
+	fields    []database.ScanRuleField
+	matcher   ScopeMatcher
+}
+
+// ScopeMatcher 判断一条扫描规则是否命中给定 URL。
+// 四种适用范围各自对应一个无状态实现，由 NewScopeMatcher 按规则构造。
+type ScopeMatcher interface {
+	MatchesURL(rawURL string) bool
+}
+
+// NewScopeMatcher 依据规则的适用范围返回对应的匹配器；
+// ScopeType 为空的遗留规则退化为 URLContains 子串匹配。
+func NewScopeMatcher(rule database.ScanRuleTemplate) ScopeMatcher {
+	switch rule.ScopeType {
+	case ScanRuleScopeGlobal:
+		return globalMatcher{}
+	case ScanRuleScopeExact, ScanRuleScopeRoute, ScanRuleScopeSection:
+		return scopedMatcher{
+			scopeType: rule.ScopeType,
+			host:      rule.MatchHost,
+			matchPath: rule.MatchPath,
+			query:     rule.MatchQuery,
+		}
+	default:
+		if rule.ScopeType != "" {
+			return neverMatcher{}
+		}
+		return legacyContainsMatcher{needle: strings.TrimSpace(rule.URLContains)}
+	}
+}
+
+// globalMatcher 通用结构规则：不限制 URL，只有页面实际存在选择器时才生成候选。
+type globalMatcher struct{}
+
+func (globalMatcher) MatchesURL(string) bool { return true }
+
+// neverMatcher 兜底未知范围：永不命中，避免误扩大匹配面。
+type neverMatcher struct{}
+
+func (neverMatcher) MatchesURL(string) bool { return false }
+
+// scopedMatcher 覆盖 exact/route/section 三种基于规范化 URL 的精确匹配：
+// 要求同主机；exact 全等 path+query，route/section 为路径段前缀且 query 为空或全等。
+type scopedMatcher struct {
+	scopeType string
+	host      string
+	matchPath string
+	query     string
+}
+
+func (m scopedMatcher) MatchesURL(rawURL string) bool {
+	normalized, err := normalizeScanRuleURL(rawURL)
+	if err != nil {
+		return false
+	}
+	if m.host == "" || !strings.EqualFold(m.host, normalized.host) {
+		return false
+	}
+	if m.scopeType == ScanRuleScopeExact {
+		return m.matchPath == normalized.path && m.query == normalized.query
+	}
+	basePath := strings.TrimSuffix(m.matchPath, "/")
+	pathMatches := normalized.path == m.matchPath
+	if m.matchPath != "/" {
+		pathMatches = pathMatches || strings.HasPrefix(normalized.path, basePath+"/")
+	}
+	queryMatches := m.query == "" || m.query == normalized.query
+	return pathMatches && queryMatches
+}
+
+// legacyContainsMatcher 遗留 URLContains 规则：忽略大小写子串匹配。
+type legacyContainsMatcher struct {
+	needle string
+}
+
+func (m legacyContainsMatcher) MatchesURL(rawURL string) bool {
+	if m.needle == "" {
+		return false
+	}
+	return strings.Contains(strings.ToLower(rawURL), strings.ToLower(m.needle))
 }
 
 const (
@@ -133,33 +212,7 @@ func ApplyScanRuleScope(rule *database.ScanRuleTemplate, rawURL, scopeType strin
 // ScanRuleMatchesURL keeps legacy URLContains rules working while scoped rules
 // use normalized host, path and query equality.
 func ScanRuleMatchesURL(rule database.ScanRuleTemplate, rawURL string) bool {
-	if rule.ScopeType == ScanRuleScopeGlobal {
-		return true
-	}
-	if rule.ScopeType == ScanRuleScopeExact || rule.ScopeType == ScanRuleScopeRoute || rule.ScopeType == ScanRuleScopeSection {
-		normalized, err := normalizeScanRuleURL(rawURL)
-		if err != nil {
-			return false
-		}
-		if rule.MatchHost == "" || !strings.EqualFold(rule.MatchHost, normalized.host) {
-			return false
-		}
-		if rule.ScopeType == ScanRuleScopeExact {
-			return rule.MatchPath == normalized.path && rule.MatchQuery == normalized.query
-		}
-		basePath := strings.TrimSuffix(rule.MatchPath, "/")
-		pathMatches := normalized.path == rule.MatchPath
-		if rule.MatchPath != "/" {
-			pathMatches = pathMatches || strings.HasPrefix(normalized.path, basePath+"/")
-		}
-		queryMatches := rule.MatchQuery == "" || rule.MatchQuery == normalized.query
-		return pathMatches && queryMatches
-	}
-	if rule.ScopeType != "" {
-		return false
-	}
-	needle := strings.TrimSpace(rule.URLContains)
-	return needle != "" && strings.Contains(strings.ToLower(rawURL), strings.ToLower(needle))
+	return NewScopeMatcher(rule).MatchesURL(rawURL)
 }
 
 // userTemplateRules 加载数据库中启用的扫描规则模板。
@@ -177,15 +230,31 @@ func userTemplateRules() []htmlScanRule {
 	for _, tpl := range templates {
 		template := tpl
 		result = append(result, htmlScanRule{
-			name:       "template_" + template.Name,
-			container:  template.Container,
-			item:       template.Item,
-			priority:   max(70, template.Priority),
-			fields:     template.Fields,
-			matchesURL: func(rawURL string) bool { return ScanRuleMatchesURL(template, rawURL) },
+			name:      "template_" + template.Name,
+			address:   templateDisplayAddress(template),
+			container: template.Container,
+			item:      template.Item,
+			priority:  max(70, template.Priority),
+			fields:    template.Fields,
+			matcher:   NewScopeMatcher(template),
 		})
 	}
 	return result
+}
+
+// templateDisplayAddress 规则「适用地址」的展示文案：通用结构规则展示为
+// 全局说明；带来源地址的展示来源地址；否则退化为 URLContains 文案。
+func templateDisplayAddress(template database.ScanRuleTemplate) string {
+	if template.ScopeType == ScanRuleScopeGlobal {
+		return "所有网站中结构相同的页面"
+	}
+	if source := strings.TrimSpace(template.SourceURL); source != "" {
+		return source
+	}
+	if contains := strings.TrimSpace(template.URLContains); contains != "" {
+		return "URL 包含 " + contains
+	}
+	return ""
 }
 
 type externalScanRuleFile struct {
@@ -227,13 +296,13 @@ func loadExternalScanRules(path string) []htmlScanRule {
 		if priority <= 0 {
 			priority = 60
 		}
-		needle := strings.ToLower(rule.URLContains)
 		rules = append(rules, htmlScanRule{
-			name:       "rule_" + rule.Name,
-			container:  rule.ContainerSelector,
-			item:       rule.ItemSelector,
-			priority:   priority,
-			matchesURL: func(rawURL string) bool { return strings.Contains(strings.ToLower(rawURL), needle) },
+			name:      "rule_" + rule.Name,
+			address:   "URL 包含 " + rule.URLContains,
+			container: rule.ContainerSelector,
+			item:      rule.ItemSelector,
+			priority:  priority,
+			matcher:   legacyContainsMatcher{needle: strings.ToLower(rule.URLContains)},
 		})
 	}
 	log.Printf("[ScannerRules] 已从 %s 加载 %d 条外部规则", path, len(rules))
@@ -251,7 +320,7 @@ func matchingHTMLScanRules(pageURL string) []htmlScanRule {
 	all := append(userTemplateRules(), runtimeScanRules...)
 	matched := make([]htmlScanRule, 0, len(all))
 	for _, rule := range all {
-		if rule.matchesURL != nil && rule.matchesURL(pageURL) {
+		if rule.matcher != nil && rule.matcher.MatchesURL(pageURL) {
 			matched = append(matched, rule)
 		}
 	}

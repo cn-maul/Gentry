@@ -1,5 +1,4 @@
 import type { ValidationResult } from '@/api/types'
-import './MonitorValidationPanel.css'
 
 interface MonitorValidationPanelProps {
   result?: ValidationResult | null

@@ -21,7 +21,7 @@ docker compose down
 
 环境要求：
 
-- Go 1.26
+- Go 1.27
 - Node.js 22 或兼容版本
 - npm（前端依赖与构建统一使用 npm）
 
