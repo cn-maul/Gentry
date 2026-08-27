@@ -47,14 +47,14 @@ func TestSaveResultsKeepsNewestPageItemFirstWithinEachFetch(t *testing.T) {
 		{"title": "middle", "url": "https://example.com/2"},
 		{"title": "oldest", "url": "https://example.com/1"},
 	}
-	if err := monitor.saveResults(firstFetch); err != nil {
+	if err := monitor.saveResults(firstFetch, true); err != nil {
 		t.Fatalf("save first fetch: %v", err)
 	}
 
 	time.Sleep(time.Millisecond)
 	if err := monitor.saveResults([]ExtractResult{
 		{"title": "latest fetch", "url": "https://example.com/4"},
-	}); err != nil {
+	}, false); err != nil {
 		t.Fatalf("save second fetch: %v", err)
 	}
 
@@ -169,5 +169,52 @@ func TestCheckNowSerializesConcurrentChecks(t *testing.T) {
 	}
 	if max := atomic.LoadInt32(&maxActive); max != 1 {
 		t.Errorf("fetches must be serialized, max concurrent fetches = %d", max)
+	}
+}
+
+func TestFirstBaselineRecordsMarkedNotified(t *testing.T) {
+	setupMonitorTestDB(t)
+
+	site := &database.Site{Name: "baseline-notified", URL: "https://example.com"}
+	if err := database.GetDB().Create(site).Error; err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+	monitor := &Monitor{site: site}
+
+	// 首次基线：markNotified=true
+	baseline := []ExtractResult{
+		{"title": "条目 A", "url": "https://example.com/a"},
+		{"title": "条目 B", "url": "https://example.com/b"},
+	}
+	if err := monitor.saveResults(baseline, true); err != nil {
+		t.Fatalf("save baseline: %v", err)
+	}
+
+	// 后续新条目：markNotified=false
+	time.Sleep(time.Millisecond)
+	if err := monitor.saveResults([]ExtractResult{
+		{"title": "新增 C", "url": "https://example.com/c"},
+	}, false); err != nil {
+		t.Fatalf("save new item: %v", err)
+	}
+
+	var records []database.UpdateRecord
+	if err := database.GetDB().Where("site_id = ?", site.ID).
+		Order("created_at desc, id asc").Find(&records).Error; err != nil {
+		t.Fatalf("load records: %v", err)
+	}
+	if len(records) != 3 {
+		t.Fatalf("record count = %d, want 3", len(records))
+	}
+	// 基线条目必须标记为已推送，避免虚假进入"待推送"统计
+	for _, r := range records {
+		if r.Title == "条目 A" || r.Title == "条目 B" {
+			if !r.Notified {
+				t.Fatalf("baseline record %q must be marked notified", r.Title)
+			}
+		}
+		if r.Title == "新增 C" && r.Notified {
+			t.Fatalf("new item %q must remain unnotified", r.Title)
+		}
 	}
 }

@@ -246,13 +246,15 @@ func (m *Monitor) checkForUpdatesContext(ctx context.Context, site database.Site
 
 	newItems := compareResults(last, current)
 	// 第一次成功抓取只建立基线，不把页面现有内容当作新增内容通知。
-	if len(last) == 0 {
+	isFirstBaseline := len(last) == 0
+	if isFirstBaseline {
 		newItems = nil
 	}
 
 	// saveResults 保存所有当前结果到数据库（含 title+url 去重），
-	// 新条目会被记录为新 UpdateRecord，已存在的跳过
-	if err := m.saveResults(current); err != nil {
+	// 新条目会被记录为新 UpdateRecord，已存在的跳过。
+	// 首次基线保存的条目直接标记为已推送，避免被计入"待推送"统计（它们不会也不应推送）。
+	if err := m.saveResults(current, isFirstBaseline); err != nil {
 		return nil, fmt.Errorf("save failed: %w", err)
 	}
 
@@ -383,7 +385,7 @@ func (m *Monitor) loadLastResults() ([]ExtractResult, error) {
 	return results, nil
 }
 
-func (m *Monitor) saveResults(results []ExtractResult) error {
+func (m *Monitor) saveResults(results []ExtractResult, markNotified bool) error {
 	if len(results) == 0 {
 		return nil
 	}
@@ -438,6 +440,8 @@ func (m *Monitor) saveResults(results []ExtractResult) error {
 			Title:     title,
 			URL:       urlStr,
 			Content:   string(data),
+			// 首次基线保存的条目直接标记为已推送；后续新条目保持未推送等待通知
+			Notified: markNotified,
 		}
 		if err := database.GetDB().Create(record).Error; err != nil {
 			log.Printf("[%s] 创建更新记录失败: %v", m.site.Name, err)
