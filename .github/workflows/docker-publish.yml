@@ -29,9 +29,10 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          # GITHUB_TOKEN 对同账号/组织下的包具备推送权限，无需额外 PAT
+          # 使用仓库 Secret GHCR_TOKEN（具备 write_package 权限的 PAT）登录，
+          # GITHUB_TOKEN 默认缺少写入 GHCR 包的权限
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_TOKEN }}
 
       # 生成镜像标签：默认分支 latest、tag v* → semver、每次构建附带 sha
       - name: Generate image metadata
