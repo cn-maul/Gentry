@@ -1,0 +1,66 @@
+/* 推送账户管理 */
+
+@layer components {
+  /* ===== 通知（推送账户管理） ===== */
+  .push-page .account-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.15rem;
+    margin-bottom: 0.6rem;
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+  }
+  .push-page .account-card:hover {
+    border-color: var(--border);
+    box-shadow: var(--shadow);
+  }
+
+  .push-page .account-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .push-page .account-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .push-page .account-name {
+    font-weight: 700;
+    font-size: 0.9375rem;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .push-page .account-actions {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .push-page .account-status {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+  }
+
+  .push-page .status-dot-ok {
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-circle);
+    background: var(--success);
+    flex-shrink: 0;
+  }
+
+  .push-page .status-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+}

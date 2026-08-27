@@ -1,0 +1,93 @@
+/* 更新面板（设置页内嵌） */
+
+@layer components {
+  /* ===== 更新面板（设置页内嵌） ===== */
+  .update-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .version-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+  }
+
+  .version-row .version-current {
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .version-btn {
+    width: 100%;
+    padding: 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+  }
+  .version-btn:hover {
+    color: var(--text);
+    background: var(--bg-hover);
+  }
+  .version-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .update-btn {
+    width: 100%;
+    padding: 0.45rem;
+    border: none;
+    border-radius: var(--radius);
+    background: var(--brand);
+    color: var(--brand-contrast);
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+  }
+  .update-btn:hover {
+    background: var(--brand-hover);
+  }
+  .update-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .progress-bar {
+    height: 4px;
+    background: var(--bg-elevated);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 0.25rem;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--brand);
+    border-radius: 2px;
+  }
+  .fill-anim {
+    width: 60%;
+    animation: progress-indeterminate 1.5s ease-in-out infinite;
+  }
+  @keyframes progress-indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(200%);
+    }
+  }
+
+}

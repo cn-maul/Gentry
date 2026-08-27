@@ -1,0 +1,80 @@
+/* 系统设置页 + 分类管理（弹窗，可在 Dashboard 中使用通用类） */
+
+@layer components {
+  /* ===== 系统设置页专属 ===== */
+  .settings-page .proxy-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .settings-page .proxy-row .form-input {
+    flex: 1;
+  }
+
+  .settings-page .ai-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+  }
+
+  .settings-page .hint {
+    color: var(--brand);
+    margin-top: 0.35rem;
+  }
+
+  /* ===== 分类管理（设置页 + Dashboard 弹窗通用） ===== */
+  .category-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.25rem;
+  }
+  .category-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.75rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+  }
+  .category-row .form-input {
+    flex: 1;
+    max-width: 240px;
+    padding: 0.35rem 0.6rem;
+  }
+  .category-name {
+    font-weight: 700;
+    color: var(--text);
+    flex-shrink: 0;
+  }
+  .category-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .category-actions {
+    display: flex;
+    gap: 0.35rem;
+    flex-shrink: 0;
+  }
+  .btn-danger-text {
+    color: var(--error);
+  }
+  .btn-danger-text:disabled {
+    color: var(--text-muted);
+    opacity: 0.6;
+  }
+  .group-hint {
+    color: var(--success);
+  }
+  .empty-inline {
+    color: var(--text-secondary);
+  }
+  .hint.error-hint {
+    color: var(--error);
+  }
+
+}

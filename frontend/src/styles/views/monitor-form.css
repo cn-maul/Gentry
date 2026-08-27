@@ -1,0 +1,673 @@
+/* 新增/编辑监控：表单、步骤条、匹配规则、校验 */
+
+@layer components {
+  /* ===== 监控器表单 ===== */
+  .monitor-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .monitor-form .step-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .monitor-form .step {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .monitor-form .step-num {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-circle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+    transition: var(--transition);
+  }
+
+  .monitor-form .step.active .step-num,
+  .monitor-form .step.done .step-num {
+    background: var(--brand);
+    color: var(--brand-contrast);
+  }
+
+  .monitor-form .step-text {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .monitor-form .step.active .step-text {
+    color: var(--text);
+  }
+
+  .monitor-form .step.done .step-text {
+    color: var(--text-secondary);
+  }
+
+  .monitor-form .step-line {
+    flex: 1;
+    height: 2px;
+    background: var(--bg-elevated);
+    margin: 0 0.5rem;
+    border-radius: 1px;
+    transition: var(--transition);
+  }
+
+  .monitor-form .step-line.done {
+    background: var(--brand);
+  }
+
+  .monitor-form .advanced-settings {
+    margin-bottom: 1rem;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .monitor-form .advanced-settings > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 0.25rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    list-style: none;
+  }
+  .monitor-form .advanced-settings > summary::-webkit-details-marker {
+    display: none;
+  }
+  .monitor-form .advanced-settings > summary span {
+    display: grid;
+    gap: 0.1rem;
+  }
+  .monitor-form .advanced-settings > summary strong {
+    color: var(--text);
+    font-size: 0.875rem;
+  }
+  .monitor-form .advanced-settings > summary small {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+  .monitor-form .advanced-settings > summary svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    transition: transform 160ms ease;
+    color: var(--text-muted);
+  }
+  .monitor-form .advanced-settings[open] > summary svg {
+    transform: rotate(90deg);
+  }
+  .monitor-form .advanced-content {
+    padding: 0.5rem 0 0.25rem;
+  }
+  /* 高级面板内部的子表单改为分隔线布局 */
+  .monitor-form .advanced-content .advanced-panel-section {
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .monitor-form .advanced-content .settings-section {
+    margin: 0;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border-light);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .monitor-form .advanced-actions {
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .monitor-form .start-option {
+    margin: 0.25rem 0 1rem;
+  }
+  .monitor-form .monitor-name-option {
+    margin: 0 0 0.75rem;
+  }
+  .monitor-form .monitor-name-option label span {
+    color: var(--text-muted);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: none;
+  }
+  .monitor-form .start-option .checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+  }
+  .monitor-form .start-option input {
+    accent-color: var(--brand);
+  }
+
+  .monitor-form .validation-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    background: transparent;
+    border-radius: 0;
+  }
+  .monitor-form .validation-actions strong {
+    display: block;
+    color: var(--text);
+    font-size: 0.875rem;
+  }
+  .monitor-form .validation-actions p {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-top: 0.15rem;
+  }
+
+  .monitor-form .baseline-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--warning-bg);
+    color: var(--warning);
+    border-radius: var(--radius);
+    font-size: 0.8125rem;
+    margin-bottom: 1rem;
+    line-height: 1.4;
+  }
+  .monitor-form .baseline-warning svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .monitor-form .notification-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--success-bg);
+    color: var(--success);
+    border-radius: var(--radius);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }
+
+  .monitor-form .notification-summary svg {
+    flex-shrink: 0;
+  }
+
+  .monitor-form .notification-summary.not-configured {
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .monitor-form .notification-summary .btn {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  /* 基本信息面板（非高级模式） */
+  .basic-monitor-form .section-header {
+    margin-bottom: 1rem;
+  }
+  .basic-monitor-form .primary-url {
+    min-height: 46px;
+    font-size: 0.9375rem;
+  }
+  .basic-monitor-form .match-rule-row {
+    margin-top: 0.75rem;
+  }
+  .basic-monitor-form .match-rule-row .btn {
+    min-width: 7.5rem;
+  }
+  .advanced-panel-section h3 {
+    margin-bottom: 0.2rem;
+    color: var(--text);
+    font-size: 0.875rem;
+  }
+  .advanced-section-desc {
+    margin-bottom: 1rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+
+  /* 新增监控页（返回按钮位于页头之上，标题需要额外间距；详情页同理） */
+  .add-monitor .page-header h1,
+  .monitor-detail .page-header h1 {
+    margin-top: 0.5rem;
+  }
+
+  /* 配置确认摘要 */
+  .form-summary {
+    padding: 1rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .form-summary .summary-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .form-summary .summary-row {
+    display: flex;
+    align-items: baseline;
+    padding: 0.4rem 0;
+    gap: 1rem;
+  }
+  .form-summary .summary-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 70px;
+    flex-shrink: 0;
+  }
+  .form-summary .summary-value {
+    font-size: 0.8125rem;
+    color: var(--text);
+    word-break: break-all;
+  }
+  .form-summary .url-value {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+  .form-summary .summary-code {
+    font-size: 0.75rem;
+    color: var(--brand);
+    background: var(--brand-soft);
+    padding: 0.1rem 0.35rem;
+    border-radius: var(--radius-xs);
+  }
+  .form-summary .summary-divider {
+    height: 1px;
+    background: var(--border-light);
+    margin: 0.25rem 0;
+  }
+  .form-summary .type-badge {
+    font-size: 0.625rem;
+    font-weight: 700;
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--radius-pill);
+  }
+  .form-summary .badge-presence {
+    background: var(--success-bg);
+    color: var(--success);
+  }
+  .form-summary .summary-baseline {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding: 0.5rem 0.6rem;
+    background: var(--bg-elevated);
+    border-radius: var(--radius);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+  .form-summary .summary-baseline svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: var(--text-muted);
+  }
+
+  /* 配置验证面板 */
+  .validation-panel {
+    padding: 1rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow-sm);
+  }
+  .validation-panel .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    min-height: 72px;
+  }
+  .validation-panel .validation-status {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius-pill);
+  }
+  .validation-panel .status-ok {
+    background: var(--success-bg);
+    color: var(--success);
+  }
+  .validation-panel .status-err {
+    background: var(--error-bg);
+    color: var(--error);
+  }
+
+  .validation-panel .validation-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .validation-panel .validation-item {
+    padding: 0.65rem 0.75rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--border);
+  }
+  .validation-panel .item-ok {
+    border-left-color: var(--success);
+  }
+  .validation-panel .item-warn {
+    border-left-color: var(--warning);
+  }
+  .validation-panel .item-err {
+    border-left-color: var(--error);
+  }
+
+  .validation-panel .item-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.2rem;
+  }
+  .validation-panel .item-status-icon {
+    display: flex;
+  }
+  .validation-panel .item-ok .item-status-icon {
+    color: var(--success);
+  }
+  .validation-panel .item-warn .item-status-icon {
+    color: var(--warning);
+  }
+  .validation-panel .item-err .item-status-icon {
+    color: var(--error);
+  }
+  .validation-panel .item-label {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .validation-panel .item-detail {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+
+  .validation-panel .item-samples {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .validation-panel .sample-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    font-family: monospace;
+    padding: 0.2rem 0.4rem;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-xs);
+  }
+  .validation-panel .sample-raw {
+    color: var(--text-muted);
+  }
+  .validation-panel .sample-key {
+    color: var(--text-secondary);
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .validation-panel .sample-arrow {
+    color: var(--text-muted);
+  }
+  .validation-panel .sample-normalized {
+    color: var(--brand);
+    font-weight: 700;
+  }
+
+  .validation-panel .validation-errors {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-bottom: 0.75rem;
+  }
+  .validation-panel .error-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--error-bg);
+    color: var(--error);
+    border-radius: var(--radius);
+    font-size: 0.8125rem;
+  }
+  .validation-panel .validation-summary {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-light);
+  }
+
+  /* 规则匹配结果面板（新建监控：点击「匹配规则」后展示命中结果） */
+  .rule-match-panel {
+    margin-top: 0.75rem;
+  }
+  .rule-match-panel .scan-results {
+    margin-bottom: 1rem;
+  }
+  .rule-match-panel .results-label {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+  }
+
+  .rule-match-panel .candidate-card {
+    background: var(--bg-card);
+    border: 2px solid transparent;
+    border-radius: var(--radius-lg);
+    padding: 0.85rem;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: var(--transition);
+  }
+  .rule-match-panel .candidate-card:hover {
+    background: var(--bg-hover);
+  }
+  .rule-match-panel .candidate-card.selected {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+  }
+
+  .rule-match-panel .candidate-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+  }
+  .rule-match-panel .candidate-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .rule-match-panel .candidate-badge {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--text);
+    background: var(--bg-elevated);
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius-pill);
+  }
+  .rule-match-panel .candidate-count {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+  .rule-match-panel .apply-btn {
+    flex-shrink: 0;
+  }
+
+  .rule-match-panel .candidate-samples {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .rule-match-panel .sample-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-xs);
+    background: var(--bg-elevated);
+    font-size: 0.8125rem;
+  }
+  .rule-match-panel .sample-title {
+    color: var(--text);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rule-match-panel .sample-meta {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-left: 0.5rem;
+    flex-shrink: 0;
+  }
+  .rule-match-panel .sample-more {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 0.2rem;
+  }
+
+  .rule-match-panel .matched-rule {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 0.85rem;
+    margin-bottom: 0.75rem;
+  }
+  .rule-match-panel .matched-rule.applied {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+  }
+  .rule-match-panel .matched-rule .mr-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    font-size: 0.8125rem;
+  }
+  .rule-match-panel .matched-rule .mr-label {
+    flex-shrink: 0;
+    width: 3.75rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+  .rule-match-panel .matched-rule .mr-value {
+    color: var(--text);
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .rule-match-panel .matched-rule .mr-value.mr-strong {
+    font-weight: 700;
+  }
+  .rule-match-panel .matched-rule .mr-address {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+  }
+  .rule-match-panel .matched-rule .mr-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.4rem;
+    padding-top: 0.6rem;
+    border-top: 1px dashed var(--border-light);
+  }
+
+  .rule-match-panel .empty-scan {
+    text-align: center;
+    padding: 1.5rem;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+  }
+  .rule-match-panel .empty-scan .empty-actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+  .rule-match-panel .selection-confirmed {
+    margin-top: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border-left: 3px solid var(--success);
+    background: var(--success-bg);
+    color: var(--success);
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+
+  /* 通知方式编辑器（账户行/徽章样式为全局共享组件） */
+  .notification-editor .filter-mode-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+    flex-wrap: wrap;
+  }
+  .notification-editor .radio-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.85rem;
+    border-radius: var(--radius-pill);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    cursor: pointer;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    transition: var(--transition);
+  }
+  .notification-editor .radio-label:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
+  .notification-editor .radio-label.active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: var(--brand-contrast);
+  }
+  .notification-editor .radio-label input {
+    display: none;
+  }
+
+  .notification-editor .accounts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+}

@@ -10,6 +10,12 @@ import {
 } from '../api/monitors'
 import type { NotifyAccount, NotificationProviderMeta } from '../api/types'
 import { useToastMessages } from '../hooks/useToastMessages'
+import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/ui/EmptyState'
+import LoadingState from '../components/ui/LoadingState'
+import Toasts from '../components/ui/Toasts'
+import Modal from '../components/ui/Modal'
+import ConfirmModal from '../components/ui/ConfirmModal'
 
 interface AccountConfig {
   [key: string]: string
@@ -91,18 +97,6 @@ export default function PushManagement() {
   useEffect(() => {
     loadAll()
   }, [])
-
-  // Esc 关闭弹窗（新增/编辑、删除确认）
-  useEffect(() => {
-    if (!showModal && !deleteTarget) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      if (deleteTarget) setDeleteTarget(null)
-      else setShowModal(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [showModal, deleteTarget])
 
   async function saveGlobalEnabled(enabled: boolean) {
     try {
@@ -203,37 +197,31 @@ export default function PushManagement() {
 
   return (
     <div className="push-page">
-      <div className="page-header">
-        <div>
-          <h1>推送通知</h1>
-          <p className="page-desc">配置推送渠道与全局开关；每个监控器可独立选择接收账户</p>
-        </div>
-        <div className="header-actions">
+      <PageHeader
+        title="推送通知"
+        desc="配置推送渠道与全局开关；每个监控器可独立选择接收账户"
+        actions={
           <button className="btn btn-primary" onClick={openCreate}>
             新增账户
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      {successMsg && <div className="toast toast-success">{successMsg}</div>}
-      {pageErrorMsg && <div className="toast toast-warning">{pageErrorMsg}</div>}
+      <Toasts success={successMsg} error={pageErrorMsg} />
 
       {loading ? (
-        <div className="loading">
-          <div className="spinner" />
-          <p>加载中...</p>
-        </div>
+        <LoadingState text="加载中..." />
       ) : accounts.length === 0 ? (
-        <div className="empty">
-          <div className="empty-icon">🔔</div>
-          <p>还没有推送账户</p>
-          <p className="mt-1 text-[0.8125rem] text-fg-muted">
-            创建账户后，可在每个监控器中独立选择启用哪些账户
-          </p>
-          <button className="btn btn-primary btn-sm mt-4" onClick={openCreate}>
-            新增账户
-          </button>
-        </div>
+        <EmptyState
+          icon="🔔"
+          title="还没有推送账户"
+          desc="创建账户后，可在每个监控器中独立选择启用哪些账户"
+          action={
+            <button className="btn btn-primary" onClick={openCreate}>
+              新增账户
+            </button>
+          }
+        />
       ) : (
         <>
           <div className="settings-section">
@@ -300,24 +288,21 @@ export default function PushManagement() {
       )}
 
       {/* Create/Edit Modal */}
-      {showModal && (
-        <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowModal(false)
-          }}
-        >
-          <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
-            <div className="modal-header">
-              <h2 id="account-modal-title">{editingAccount ? '编辑账户' : '新增账户'}</h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-            <div className="modal-body">
+      <Modal
+        open={showModal}
+        title={editingAccount ? '编辑账户' : '新增账户'}
+        onClose={() => setShowModal(false)}
+        footer={
+          <>
+            <button className="btn btn-ghost" onClick={() => setShowModal(false)}>
+              取消
+            </button>
+            <button className="btn btn-primary" disabled={modalSaving} onClick={handleSaveAccount}>
+              {modalSaving ? '保存中...' : '保存'}
+            </button>
+          </>
+        }
+      >
               <div className="form-group">
                 <label>账户名称</label>
                 <input
@@ -465,52 +450,20 @@ export default function PushManagement() {
               )}
 
               {modalError && <div className="form-error">{modalError}</div>}
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setShowModal(false)}>
-                取消
-              </button>
-              <button className="btn btn-primary" disabled={modalSaving} onClick={handleSaveAccount}>
-                {modalSaving ? '保存中...' : '保存'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Delete Confirm */}
-      {deleteTarget && (
-        <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setDeleteTarget(null)
-          }}
-        >
-          <div className="modal-container max-w-[400px]" role="dialog" aria-modal="true" aria-labelledby="account-delete-title">
-            <div className="modal-header">
-              <h2 id="account-delete-title">确认删除</h2>
-              <button className="modal-close" onClick={() => setDeleteTarget(null)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-            <div className="modal-body">
-              <p>确定删除推送账户「{deleteTarget.name}」吗？</p>
-              <p className="mt-2">已选择此账户的监控器将不再收到推送。</p>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>
-                取消
-              </button>
-              <button className="btn btn-danger" onClick={handleDeleteAccount}>
-                确认删除
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={deleteTarget !== null}
+        title="确认删除"
+        danger
+        confirmText="确认删除"
+        onConfirm={handleDeleteAccount}
+        onCancel={() => setDeleteTarget(null)}
+      >
+        <p>确定删除推送账户「{deleteTarget?.name}」吗？</p>
+        <p className="mt-2">已选择此账户的监控器将不再收到推送。</p>
+      </ConfirmModal>
     </div>
   )
 }

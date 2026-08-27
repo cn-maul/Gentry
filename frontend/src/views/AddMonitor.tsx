@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import {
   createMonitor,
   updateMonitor,
@@ -21,6 +21,9 @@ import {
 } from '../lib/monitorForm'
 import type { MonitorFormState } from '../lib/monitorForm'
 import { useToastMessages } from '../hooks/useToastMessages'
+import PageHeader from '../components/ui/PageHeader'
+import Toasts from '../components/ui/Toasts'
+import LoadingState from '../components/ui/LoadingState'
 
 export default function AddMonitor() {
   const navigate = useNavigate()
@@ -187,23 +190,12 @@ export default function AddMonitor() {
 
   return (
     <div className="add-monitor">
-      <div className="page-header">
-        <div>
-          <Link to="/" className="back-btn">
-            ← 返回
-          </Link>
-          <h1>{pageTitle}</h1>
-        </div>
-      </div>
+      <PageHeader backTo="/" title={pageTitle} />
 
-      {successMsg && <div className="toast toast-success">{successMsg}</div>}
-      {pageErrorMsg && <div className="toast toast-warning">{pageErrorMsg}</div>}
+      <Toasts success={successMsg} error={pageErrorMsg} />
 
       {isEdit && loading ? (
-        <div className="loading">
-          <div className="spinner" />
-          <p>加载配置...</p>
-        </div>
+        <LoadingState text="加载配置..." />
       ) : (
         <MonitorForm
           form={form}

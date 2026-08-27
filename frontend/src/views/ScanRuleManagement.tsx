@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router'
 import { deleteScanRule, exportScanRules, fetchScanRules, importScanRules } from '../api/monitors'
 import type { ScanRule } from '../api/types'
 import { useToastMessages } from '../hooks/useToastMessages'
+import { useResource } from '../hooks/useResource'
+import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/ui/EmptyState'
+import LoadingState from '../components/ui/LoadingState'
+import Toasts from '../components/ui/Toasts'
 
 function errorMessage(error: unknown) {
   if (error instanceof Error) return error.message || '操作失败'
@@ -36,34 +41,22 @@ export default function ScanRuleManagement() {
   const navigate = useNavigate()
   const { successMsg, pageErrorMsg, showSuccess, showError } = useToastMessages()
 
-  const [loading, setLoading] = useState(true)
-  const [rules, setRules] = useState<ScanRule[]>([])
+  const { data: rulesData, loading, error, load, refresh } = useResource<ScanRule[]>(fetchScanRules, { initial: [] })
+  const rules = rulesData ?? []
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const fileInput = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
-    loadRules()
-  }, [])
-
-  async function loadRules() {
-    setLoading(true)
-    try {
-      const response = await fetchScanRules()
-      setRules(response.code === 0 ? response.data || [] : [])
-    } catch (error) {
-      showError('加载规则失败: ' + errorMessage(error))
-    } finally {
-      setLoading(false)
-    }
-  }
+    load()
+  }, [load])
 
   async function handleDelete(rule: ScanRule) {
     if (!window.confirm(`确定删除规则「${rule.name}」吗？`)) return
     try {
       await deleteScanRule(rule.id)
-      setRules((prev) => prev.filter((item) => item.id !== rule.id))
       showSuccess('规则已删除')
+      refresh()
     } catch (error) {
       showError('删除规则失败: ' + errorMessage(error))
     }
@@ -80,7 +73,7 @@ export default function ScanRuleManagement() {
       link.download = `gentry-scan-rules-${new Date().toISOString().slice(0, 10)}.json`
       link.click()
       URL.revokeObjectURL(link.href)
-      showSuccess(`已导出 ${rules.length} 条规则`)
+      showSuccess(`已导出 ${(rules || []).length} 条规则`)
     } catch (error) {
       showError('导出规则失败: ' + errorMessage(error))
     } finally {
@@ -99,7 +92,7 @@ export default function ScanRuleManagement() {
       const imported = response.data?.imported || 0
       const skipped = response.data?.skipped || 0
       showSuccess(`已导入 ${imported} 条${skipped ? `，跳过 ${skipped} 条同名规则` : ''}`)
-      await loadRules()
+      await refresh()
     } catch (error) {
       showError('导入规则失败: ' + errorMessage(error))
     } finally {
@@ -110,47 +103,46 @@ export default function ScanRuleManagement() {
 
   return (
     <div className="scan-rules-page">
-      {successMsg && <div className="toast toast-success">{successMsg}</div>}
-      {pageErrorMsg && <div className="toast toast-error">{pageErrorMsg}</div>}
+      <Toasts success={successMsg} error={pageErrorMsg} />
 
-      <header className="page-header">
-        <div>
-          <h1>规则库</h1>
-          <p className="page-desc">共 {rules.length} 条规则；监控器的内容识别完全依赖这里的规则</p>
-        </div>
-        <div className="header-actions">
-          <input
-            ref={fileInput}
-            className="file-input"
-            type="file"
-            accept="application/json,.json"
-            onChange={handleImportFile}
-          />
-          <button className="btn btn-ghost btn-sm" disabled={importing} onClick={() => fileInput.current?.click()}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M12 3v12" />
-              <path d="m7 10 5 5 5-5" />
-              <path d="M5 21h14" />
-            </svg>
-            {importing ? '导入中...' : '导入'}
-          </button>
-          <button className="btn btn-ghost btn-sm" disabled={exporting || rules.length === 0} onClick={handleExport}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M12 21V9" />
-              <path d="m17 14-5-5-5 5" />
-              <path d="M5 3h14" />
-            </svg>
-            {exporting ? '导出中...' : '导出'}
-          </button>
-          <button className="btn btn-primary" onClick={() => navigate('/rules/add')}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" aria-hidden="true">
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-            添加规则
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        title="规则库"
+        desc={`共 ${rules.length} 条规则；监控器的内容识别完全依赖这里的规则`}
+        actions={
+          <>
+            <input
+              ref={fileInput}
+              className="file-input"
+              type="file"
+              accept="application/json,.json"
+              onChange={handleImportFile}
+            />
+            <button className="btn btn-ghost btn-sm" disabled={importing} onClick={() => fileInput.current?.click()}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M12 3v12" />
+                <path d="m7 10 5 5 5-5" />
+                <path d="M5 21h14" />
+              </svg>
+              {importing ? '导入中...' : '导入'}
+            </button>
+            <button className="btn btn-ghost btn-sm" disabled={exporting || rules.length === 0} onClick={handleExport}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M12 21V9" />
+                <path d="m17 14-5-5-5 5" />
+                <path d="M5 3h14" />
+              </svg>
+              {exporting ? '导出中...' : '导出'}
+            </button>
+            <button className="btn btn-primary" onClick={() => navigate('/rules/add')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" aria-hidden="true">
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+              添加规则
+            </button>
+          </>
+        }
+      />
 
       {/* ═══ 已保存规则（表格） ═══ */}
       <section className="library-section" aria-labelledby="rule-library-title">
@@ -160,19 +152,29 @@ export default function ScanRuleManagement() {
         </div>
 
         {loading ? (
-          <div className="loading">
-            <div className="spinner" />
-            <p>正在加载规则...</p>
-          </div>
+          <LoadingState text="正在加载规则..." />
+        ) : error ? (
+          <EmptyState
+            icon="❌"
+            title="加载失败"
+            desc={error}
+            action={
+              <button className="btn btn-primary btn-sm" onClick={load}>
+                重试
+              </button>
+            }
+          />
         ) : rules.length === 0 ? (
-          <div className="empty">
-            <div className="empty-icon">🗂️</div>
-            <p className="empty-title">还没有已保存的规则</p>
-            <p className="empty-desc">创建规则后，新增监控器时就能自动识别页面内容区域</p>
-            <button className="btn btn-primary mt-5" onClick={() => navigate('/rules/add')}>
-              添加第一条规则
-            </button>
-          </div>
+          <EmptyState
+            icon="🗂️"
+            title="还没有已保存的规则"
+            desc="创建规则后，新增监控器时就能自动识别页面内容区域"
+            action={
+              <button className="btn btn-primary" onClick={() => navigate('/rules/add')}>
+                添加第一条规则
+              </button>
+            }
+          />
         ) : (
           <div className="settings-section rule-table-card">
             <table className="data-table">

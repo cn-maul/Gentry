@@ -1,0 +1,163 @@
+/* 全局布局：侧边栏（Layout）+ 主内容区 */
+
+@layer components {
+  /* ===== 布局 Layout ===== */
+  .layout {
+    display: flex;
+    min-height: 100vh;
+    background: var(--bg-base);
+  }
+
+  /* 左栏 */
+  .sidebar-left {
+    width: 224px;
+    min-width: 224px;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 100;
+  }
+
+  .sidebar-brand {
+    padding: 1.25rem 1.25rem;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .brand-link {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    text-decoration: none;
+    color: var(--text);
+  }
+
+  .brand-icon {
+    color: var(--brand);
+    display: flex;
+    background: linear-gradient(135deg, var(--brand), var(--brand-dim));
+    color: var(--brand-contrast);
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius);
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: var(--shadow-sm);
+  }
+  .brand-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+  .brand-text {
+    font-size: 1.0625rem;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+  }
+
+  .sidebar-nav {
+    flex: 1;
+    padding: 0.85rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.55rem 0.8rem;
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    transition:
+      color 0.2s ease,
+      background-color 0.2s ease;
+    border: none;
+    background: none;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+  }
+
+  .nav-item:hover {
+    color: var(--text);
+    background: var(--bg-hover);
+  }
+
+  .nav-item.active {
+    color: var(--brand);
+    background: var(--brand-soft);
+    box-shadow: inset 0 0 0 1px var(--brand-soft-border);
+    font-weight: 700;
+  }
+
+  .nav-item svg {
+    flex-shrink: 0;
+    opacity: 0.75;
+  }
+  .nav-item.active svg {
+    opacity: 1;
+  }
+
+  /* 新增监控全局入口：品牌色突出显示 */
+  .nav-item.nav-add {
+    color: var(--brand);
+    background: var(--brand-soft);
+    box-shadow: inset 0 0 0 1px var(--brand-soft-border);
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
+  .nav-item.nav-add:hover {
+    color: var(--brand-contrast);
+    background: var(--brand);
+    box-shadow: none;
+  }
+  .nav-item.nav-add svg {
+    opacity: 1;
+  }
+
+  .sidebar-footer {
+    padding: 0.75rem;
+    border-top: 1px solid var(--border-light);
+  }
+
+  .theme-btn {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+  .theme-btn:hover {
+    color: var(--text-secondary);
+    background: var(--bg-hover);
+  }
+
+  /* 主内容 */
+  .main-content {
+    flex: 1;
+    margin-left: 224px;
+    padding: 2rem 2.5rem 3rem;
+    min-width: 0;
+    max-width: 1240px;
+  }
+
+  /* 页面容器统一宽度：所有视图使用一致的内容宽度并居中，
+     避免设置页 720px / 新增监控 860px / 规则库 1120px 参差不齐 */
+  .dashboard,
+  .monitor-detail,
+  .push-page,
+  .add-monitor,
+  .scan-rules-page,
+  .settings-page {
+    width: 100%;
+    max-width: 1120px;
+    margin: 0 auto;
+  }
+
+}

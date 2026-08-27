@@ -1,10 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { fetchMonitors, fetchStats, startMonitor, stopMonitor, deleteMonitor } from '../api/monitors'
-import type { Monitor, Stats } from '../api/types'
+import {
+  fetchMonitors,
+  fetchStats,
+  fetchCategories,
+  createCategory,
+  renameCategory,
+  deleteCategory,
+  startMonitor,
+  stopMonitor,
+  deleteMonitor,
+} from '../api/monitors'
+import type { Category, Monitor, Stats } from '../api/types'
 import MonitorCard from '../components/MonitorCard'
 import { useToastMessages } from '../hooks/useToastMessages'
 import { useResource } from '../hooks/useResource'
+import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/ui/EmptyState'
+import LoadingState from '../components/ui/LoadingState'
+import ConfirmModal from '../components/ui/ConfirmModal'
+import Toasts from '../components/ui/Toasts'
+import Modal from '../components/ui/Modal'
 
 interface MonitorOverride {
   isRunning?: boolean
@@ -32,6 +48,83 @@ export default function Dashboard() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const { successMsg, pageErrorMsg, showSuccess, showError } = useToastMessages()
+
+  // ── 分类（监控分组）──
+  const [categories, setCategories] = useState<Category[]>([])
+  const [activeCategory, setActiveCategory] = useState('全部')
+  const [showCategoryManager, setShowCategoryManager] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [categoryBusy, setCategoryBusy] = useState(false)
+  const [categoryMsg, setCategoryMsg] = useState('')
+  const [categoryError, setCategoryError] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingName, setEditingName] = useState('')
+
+  function loadCategories() {
+    fetchCategories()
+      .then((res) => {
+        if (res.code === 0) setCategories(res.data || [])
+      })
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    loadCategories()
+  }, [])
+
+  async function handleCreateCategory() {
+    const name = newCategoryName.trim()
+    if (!name) return
+    setCategoryBusy(true)
+    setCategoryError('')
+    setCategoryMsg('')
+    try {
+      await createCategory(name)
+      setNewCategoryName('')
+      setCategoryMsg(`分类「${name}」已创建`)
+      loadCategories()
+    } catch (e) {
+      setCategoryError(e instanceof Error ? e.message : '创建失败')
+    } finally {
+      setCategoryBusy(false)
+    }
+  }
+
+  async function handleRenameCategory(id: number) {
+    const name = editingName.trim()
+    if (!name) return
+    setCategoryBusy(true)
+    setCategoryError('')
+    setCategoryMsg('')
+    try {
+      await renameCategory(id, name)
+      setEditingId(null)
+      setEditingName('')
+      setCategoryMsg('分类已重命名')
+      loadCategories()
+    } catch (e) {
+      setCategoryError(e instanceof Error ? e.message : '重命名失败')
+    } finally {
+      setCategoryBusy(false)
+    }
+  }
+
+  async function handleDeleteCategory(id: number, name: string) {
+    if (!window.confirm(`确定删除分类「${name}」吗？其下监控器将迁移到「默认」`)) return
+    setCategoryBusy(true)
+    setCategoryError('')
+    setCategoryMsg('')
+    try {
+      await deleteCategory(id)
+      setCategoryMsg(`分类「${name}」已删除`)
+      if (activeCategory === name) setActiveCategory('全部')
+      loadCategories()
+    } catch (e) {
+      setCategoryError(e instanceof Error ? e.message : '删除失败')
+    } finally {
+      setCategoryBusy(false)
+    }
+  }
 
   const {
     data: monitors,
@@ -111,8 +204,10 @@ export default function Dashboard() {
   }
 
   const groupList = useMemo(() => {
+    // 分类筛选：activeCategory 为「全部」时不过滤，否则只看该分类下的监控
+    const scoped = activeCategory === '全部' ? filtered : filtered.filter((m) => (m.group || '默认') === activeCategory)
     const map: Record<string, { name: string; items: Monitor[] }> = {}
-    for (const m of filtered) {
+    for (const m of scoped) {
       const g = m.group || '默认'
       if (!map[g]) map[g] = { name: g, items: [] }
       map[g].items.push(m)
@@ -123,21 +218,29 @@ export default function Dashboard() {
       return a.localeCompare(b, 'zh')
     })
     return keys.map((k) => map[k])
-  }, [filtered])
+  }, [filtered, activeCategory])
+
+  // 每个分类下的监控数量（用于 chips 角标与筛选空态）
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const m of monitors || []) {
+      const g = (m.group || '').trim() || '默认'
+      counts[g] = (counts[g] || 0) + 1
+    }
+    return counts
+  }, [monitors])
+
+  const allCategoryNames = useMemo(() => {
+    const names = (categories || []).map((c) => c.name)
+    if (!names.includes('默认')) names.unshift('默认')
+    return names
+  }, [categories])
 
   useEffect(() => {
     loadData()
   }, [loadData])
 
-  // Esc 关闭删除确认弹窗
-  useEffect(() => {
-    if (!deleteTarget) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setDeleteTarget(null)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [deleteTarget])
+  // Esc 关闭删除确认弹窗由 ConfirmModal 内部处理
 
   async function toggleMonitor(name: string, start: boolean) {
     setPending(name, true)
@@ -176,10 +279,10 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
-      <div className="page-header">
-        <div>
-          <h1>监控总览</h1>
-          <p className="page-desc">
+      <PageHeader
+        title="监控总览"
+        desc={
+          <>
             管理和监控网页内容变更
             {lastUpdatedText && (
               <>
@@ -187,14 +290,14 @@ export default function Dashboard() {
                 <span className="text-[0.75rem] text-fg-muted">{lastUpdatedText}</span>
               </>
             )}
-          </p>
-        </div>
-        <div className="header-actions">
+          </>
+        }
+        actions={
           <Link to="/add" className="btn btn-primary">
             新增监控器
           </Link>
-        </div>
-      </div>
+        }
+      />
 
       <div className="stats-strip">
         <div className="stat-cell">
@@ -240,48 +343,87 @@ export default function Dashboard() {
         <div className="toolbar-spacer" />
       </div>
 
-      {successMsg && <div className="toast toast-success">{successMsg}</div>}
-      {pageErrorMsg && <div className="toast toast-warning">{pageErrorMsg}</div>}
+      {/* 分类筛选 chips */}
+      <div className="category-chips">
+        <button
+          type="button"
+          className={`chip${activeCategory === '全部' ? ' active' : ''}`}
+          onClick={() => setActiveCategory('全部')}
+        >
+          全部
+          <span className="chip-count">{(monitors || []).length}</span>
+        </button>
+        {allCategoryNames.map((name) => (
+          <button
+            key={name}
+            type="button"
+            className={`chip${activeCategory === name ? ' active' : ''}`}
+            onClick={() => setActiveCategory(name)}
+          >
+            {name}
+            <span className="chip-count">{categoryCounts[name] ?? 0}</span>
+          </button>
+        ))}
+        <button type="button" className="chip chip-ghost" onClick={() => setShowCategoryManager(true)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13">
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
+          管理分类
+        </button>
+      </div>
+
+      <Toasts success={successMsg} error={pageErrorMsg} />
 
       {loading ? (
-        <div className="loading">
-          <div className="spinner" />
-          <p>加载中...</p>
-        </div>
+        <LoadingState text="加载中..." />
       ) : error ? (
-        <div className="empty">
-          <div className="empty-icon">❌</div>
-          <p>加载失败</p>
-          <p className="mt-1 text-[0.8125rem] text-fg-muted">{error}</p>
-          <button className="btn btn-primary btn-sm mt-4" onClick={loadData}>
-            重试
-          </button>
-        </div>
+        <EmptyState
+          icon="❌"
+          title="加载失败"
+          desc={<span className="text-[0.8125rem] text-fg-muted">{error}</span>}
+          action={
+            <button className="btn btn-primary btn-sm" onClick={loadData}>
+              重试
+            </button>
+          }
+        />
       ) : !monitorsView || monitorsView.length === 0 ? (
-        <div className="empty">
-          <div className="empty-icon">📡</div>
-          <p className="empty-title">还没有监控任务</p>
-          <p className="empty-desc">粘贴网址创建监控；内容区域由已保存的扫描规则识别，可在「规则库」中维护</p>
-          <Link to="/add" className="btn btn-primary mt-5">
-            创建第一个监控
-          </Link>
-          <div className="empty-hints">
-            <span>支持公告更新</span>
-            <span className="hint-dot" />
-            <span>规则驱动识别</span>
-            <span className="hint-dot" />
-            <span>多渠道推送</span>
-          </div>
-        </div>
+        <EmptyState
+          icon="📡"
+          title="还没有监控任务"
+          desc="粘贴网址创建监控；内容区域由已保存的扫描规则识别，可在「规则库」中维护"
+          action={
+            <Link to="/add" className="btn btn-primary">
+              创建第一个监控
+            </Link>
+          }
+          hints={['支持公告更新', '规则驱动识别', '多渠道推送']}
+        />
       ) : filtered.length === 0 ? (
-        <div className="empty">
-          <div className="empty-icon">🔍</div>
-          <p className="empty-title">没有匹配的监控器</p>
-          <p className="empty-desc">换个关键词试试，或清空搜索</p>
-          <button className="btn btn-ghost btn-sm mt-4" onClick={() => setQuery('')}>
-            清空搜索
-          </button>
-        </div>
+        activeCategory !== '全部' ? (
+          <EmptyState
+            icon="🗂️"
+            title={`分类「${activeCategory}」下暂无监控`}
+            desc="可切换回全部，或在该分类下新建监控"
+            action={
+              <button className="btn btn-ghost btn-sm" onClick={() => setActiveCategory('全部')}>
+                查看全部监控
+              </button>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon="🔍"
+            title="没有匹配的监控器"
+            desc="换个关键词试试，或清空搜索"
+            action={
+              <button className="btn btn-ghost btn-sm" onClick={() => setQuery('')}>
+                清空搜索
+              </button>
+            }
+          />
+        )
       ) : (
         groupList.map((group) => (
           <div key={group.name} className="group-section">
@@ -308,38 +450,107 @@ export default function Dashboard() {
       )}
 
       {/* 删除确认弹窗：作为覆盖层渲染在列表之上，不再替换整个列表 */}
-      {deleteTarget && (
-        <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setDeleteTarget(null)
-          }}
-        >
-          <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="dashboard-delete-title">
-            <div className="modal-header">
-              <h2 id="dashboard-delete-title">确认删除</h2>
-              <button className="modal-close" onClick={() => setDeleteTarget(null)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-            <div className="modal-body">
-              <p>确定要删除监控器「{deleteTarget}」吗？</p>
-              <p className="mt-2">删除后无法恢复。</p>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>
-                取消
-              </button>
-              <button className="btn btn-danger" onClick={handleDelete}>
-                确认删除
-              </button>
-            </div>
+      <ConfirmModal
+        open={deleteTarget !== null}
+        title="确认删除"
+        danger
+        confirmText="确认删除"
+        busy={deleteTarget ? pendingNames.has(deleteTarget) : false}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      >
+        <p>确定要删除监控器「{deleteTarget}」吗？</p>
+        <p className="mt-2">删除后无法恢复。</p>
+      </ConfirmModal>
+
+      {/* 分类管理弹窗 */}
+      <Modal open={showCategoryManager} title="分类管理" onClose={() => setShowCategoryManager(false)}>
+        <div className="form-group">
+          <label>新建分类</label>
+          <div className="category-create-row">
+            <input
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateCategory()
+              }}
+              className="form-input"
+              placeholder="如 新闻资讯"
+            />
+            <button className="btn btn-primary" disabled={categoryBusy || !newCategoryName.trim()} onClick={handleCreateCategory}>
+              添加
+            </button>
           </div>
         </div>
-      )}
+
+        <div className="category-list">
+          {(categories || []).map((cat) => (
+            <div key={cat.id} className="category-row">
+              {editingId === cat.id ? (
+                <>
+                  <input
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRenameCategory(cat.id)
+                      if (e.key === 'Escape') {
+                        setEditingId(null)
+                        setEditingName('')
+                      }
+                    }}
+                    className="form-input"
+                    autoFocus
+                  />
+                  <button className="btn btn-sm btn-primary" disabled={categoryBusy} onClick={() => handleRenameCategory(cat.id)}>
+                    保存
+                  </button>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => {
+                      setEditingId(null)
+                      setEditingName('')
+                    }}
+                  >
+                    取消
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="category-name">{cat.name}</span>
+                  <span className="category-count">{categoryCounts[cat.name] ?? 0} 个监控</span>
+                  <div className="category-actions">
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      disabled={categoryBusy}
+                      onClick={() => {
+                        setEditingId(cat.id)
+                        setEditingName(cat.name)
+                      }}
+                    >
+                      重命名
+                    </button>
+                    <button
+                      className="btn btn-sm btn-ghost btn-danger-text"
+                      disabled={categoryBusy || cat.name === '默认'}
+                      title={cat.name === '默认' ? '默认分类不可删除' : '删除后其下监控器迁移到「默认」'}
+                      onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                    >
+                      删除
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+          {(categories || []).length === 0 && (
+            <p className="hint">
+              <span className="empty-inline">暂无分类，可新建自定义分类；未分类的监控器属于「默认」。</span>
+            </p>
+          )}
+        </div>
+        {categoryMsg && <p className="hint group-hint">{categoryMsg}</p>}
+        {categoryError && <p className="hint error-hint">{categoryError}</p>}
+      </Modal>
     </div>
   )
 }

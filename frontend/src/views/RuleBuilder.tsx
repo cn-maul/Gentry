@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import PageHeader from '../components/ui/PageHeader'
+import Toasts from '../components/ui/Toasts'
 import {
   captureScanRule,
   fetchLLMSettings,
@@ -323,18 +325,13 @@ export default function RuleBuilder() {
 
   return (
     <div className="scan-rules-page rule-builder-page">
-      {successMsg && <div className="toast toast-success">{successMsg}</div>}
-      {pageErrorMsg && <div className="toast toast-error">{pageErrorMsg}</div>}
+      <Toasts success={successMsg} error={pageErrorMsg} />
 
-      <header className="page-header">
-        <div>
-          <Link to="/rules" className="back-btn">
-            ← 规则库
-          </Link>
-          <h1>添加规则</h1>
-          <p className="page-desc">用 AI 一键识别页面内容结构，或手动配置选择器与提取字段</p>
-        </div>
-      </header>
+      <PageHeader
+        backTo="/rules"
+        title="添加规则"
+        desc="用 AI 一键识别页面内容结构，或手动配置选择器与提取字段"
+      />
 
       {/* 标签页切换 */}
       <div className="tab-bar" role="tablist" aria-label="创建方式">

@@ -1,0 +1,247 @@
+/* 监控总览：统计条 + 空状态提示 */
+
+@layer components {
+  /* ===== 概览统计条（Dashboard） ===== */
+  .stats-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .stat-cell {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.15rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+  }
+
+  .stat-cell .stat-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+
+  .stat-cell .stat-num {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .stat-cell .stat-num.accent {
+    color: var(--brand);
+  }
+  .stat-cell .stat-num.ok {
+    color: var(--success);
+  }
+  .stat-cell .stat-num.warn {
+    color: var(--warning);
+  }
+
+  .stat-cell .stat-sub {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .stat-progress {
+    height: 4px;
+    background: var(--bg-elevated);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 0.25rem;
+  }
+  .stat-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--brand), var(--brand-dim));
+    border-radius: 2px;
+    transition: width 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  /* 仪表盘工具栏（搜索 + 操作） */
+  .dashboard-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .dashboard-toolbar .search-box {
+    position: relative;
+    flex: 1;
+    min-width: 220px;
+    max-width: 360px;
+  }
+  .dashboard-toolbar .search-box svg {
+    position: absolute;
+    left: 0.8rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+  .dashboard-toolbar .search-box .form-input {
+    padding-left: 2.3rem;
+  }
+  .dashboard-toolbar .toolbar-spacer {
+    flex: 1;
+  }
+
+  /* Skeleton */
+  .skel {
+    height: 2rem;
+    background: var(--bg-elevated);
+    border-radius: var(--radius);
+    margin-bottom: 0.5rem;
+    animation: skel-pulse 1.2s ease-in-out infinite;
+  }
+  .skel-sm {
+    height: 0.75rem;
+    width: 60%;
+  }
+  .skel-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .skel-row .skel {
+    flex: 1;
+    height: 3rem;
+  }
+  @keyframes skel-pulse {
+    0%,
+    100% {
+      opacity: 0.5;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  .stats-error {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 1.5rem 0;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: var(--radius-circle);
+    flex-shrink: 0;
+    margin-left: 0.4rem;
+  }
+  .dot-ok {
+    background: var(--success);
+    box-shadow: 0 0 6px var(--brand-soft);
+  }
+  .dot-err {
+    background: var(--error);
+    box-shadow: 0 0 6px rgba(220, 38, 38, 0.4);
+  }
+
+  /* ────────────────────────────────────────────────
+     以下为各视图/组件的专属样式（原分散的 .css 已合并）
+     统一使用设计令牌
+     ──────────────────────────────────────────────── */
+
+  /* ===== Dashboard 空状态提示 ===== */
+  .dashboard .empty-hints {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .dashboard .hint-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: var(--radius-circle);
+    background: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  /* ===== Dashboard 分类筛选 chips ===== */
+  .category-chips {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin: 0.9rem 0 1.1rem;
+  }
+  .category-chips .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      color 0.2s ease,
+      border-color 0.2s ease,
+      background-color 0.2s ease;
+  }
+  .category-chips .chip:hover {
+    color: var(--text);
+    border-color: var(--brand-dim);
+    background: var(--bg-hover);
+  }
+  .category-chips .chip.active {
+    color: var(--brand);
+    border-color: var(--brand);
+    background: var(--brand-soft);
+  }
+  .category-chips .chip .chip-count {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: var(--bg-hover);
+    border-radius: 999px;
+    padding: 0.05rem 0.45rem;
+  }
+  .category-chips .chip.active .chip-count {
+    color: var(--brand);
+    background: var(--brand-soft-border);
+  }
+  .category-chips .chip.chip-ghost {
+    border-style: dashed;
+    color: var(--text-muted);
+  }
+  .category-chips .chip.chip-ghost:hover {
+    color: var(--brand);
+    border-color: var(--brand-dim);
+  }
+
+  /* 分类管理弹窗内的新建输入行 */
+  .category-create-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .category-create-row .form-input {
+    flex: 1;
+  }
+
+}

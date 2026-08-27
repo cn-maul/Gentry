@@ -17,6 +17,11 @@ import type { Monitor, NotifyAccount, UpdateRecord } from '../api/types'
 import StatusBadge from '../components/StatusBadge'
 import UpdateTable from '../components/UpdateTable'
 import { useToastMessages } from '../hooks/useToastMessages'
+import PageHeader from '../components/ui/PageHeader'
+import Toasts from '../components/ui/Toasts'
+import LoadingState from '../components/ui/LoadingState'
+import EmptyState from '../components/ui/EmptyState'
+import ConfirmModal from '../components/ui/ConfirmModal'
 
 const UPDATES_PAGE_SIZE = 20
 
@@ -131,16 +136,6 @@ export default function MonitorDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeName])
 
-  // Esc 关闭删除确认弹窗
-  useEffect(() => {
-    if (!showDeleteConfirm) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShowDeleteConfirm(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [showDeleteConfirm])
-
   async function toggleRun() {
     if (!routeName || !monitor) return
     setActionLoading(true)
@@ -236,92 +231,71 @@ export default function MonitorDetail() {
 
   return (
     <div className="monitor-detail">
-      <div className="page-header">
-        <div>
-          <Link to="/" className="back-btn">
-            ← 返回
-          </Link>
-          <h1>{monitor ? monitor.name : '加载中...'}</h1>
-        </div>
-        {monitor && (
-          <div className="header-actions">
-            <button
-              className={`circle-btn ${monitor.is_running ? 'btn-pause' : 'btn-play'}`}
-              onClick={toggleRun}
-              disabled={actionLoading}
-              title={monitor.is_running ? '暂停' : '启动'}
-            >
-              {monitor.is_running ? (
-                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                  <rect x="6" y="4" width="4" height="16" rx="1" />
-                  <rect x="14" y="4" width="4" height="16" rx="1" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
-            </button>
-            <Link to={`/edit/${encodeURIComponent(monitor.name)}`} className="btn btn-ghost btn-sm">
-              编辑
-            </Link>
-            <button className="btn btn-ghost btn-sm text-error" onClick={() => setShowDeleteConfirm(true)}>
-              删除
-            </button>
-          </div>
-        )}
-      </div>
+      <PageHeader
+        backTo="/"
+        title={monitor ? monitor.name : '加载中...'}
+        actions={
+          monitor && (
+            <>
+              <button
+                className={`circle-btn ${monitor.is_running ? 'btn-pause' : 'btn-play'}`}
+                onClick={toggleRun}
+                disabled={actionLoading}
+                title={monitor.is_running ? '暂停' : '启动'}
+              >
+                {monitor.is_running ? (
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                    <rect x="6" y="4" width="4" height="16" rx="1" />
+                    <rect x="14" y="4" width="4" height="16" rx="1" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                )}
+              </button>
+              <Link to={`/edit/${encodeURIComponent(monitor.name)}`} className="btn btn-ghost btn-sm">
+                编辑
+              </Link>
+              <button className="btn btn-ghost btn-sm text-error" onClick={() => setShowDeleteConfirm(true)}>
+                删除
+              </button>
+            </>
+          )
+        }
+      />
 
-      {successMsg && <div className="toast toast-success">{successMsg}</div>}
-      {pageErrorMsg && <div className="toast toast-warning">{pageErrorMsg}</div>}
+      <Toasts success={successMsg} error={pageErrorMsg} />
 
       {loading ? (
-        <div className="loading">
-          <div className="spinner" />
-          <p>加载监控器详情...</p>
-        </div>
+        <LoadingState text="加载监控器详情..." />
       ) : error ? (
-        <div className="empty">
-          <div className="empty-icon">❌</div>
-          <p>{error}</p>
-          <button className="btn btn-primary btn-sm mt-4" onClick={loadData}>
-            重试
-          </button>
-        </div>
+        <EmptyState
+          icon="❌"
+          title="加载失败"
+          desc={error}
+          action={
+            <button className="btn btn-primary btn-sm" onClick={loadData}>
+              重试
+            </button>
+          }
+        />
       ) : (
         monitor && (
           <>
             {showDeleteConfirm && (
-              <div
-                className="modal-overlay"
-                onClick={(e) => {
-                  if (e.target === e.currentTarget) setShowDeleteConfirm(false)
-                }}
+              <ConfirmModal
+                open={showDeleteConfirm}
+                title="确认删除"
+                danger
+                confirmText="确认删除"
+                busy={actionLoading}
+                onConfirm={handleDelete}
+                onCancel={() => setShowDeleteConfirm(false)}
               >
-                <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="monitor-delete-title">
-                  <div className="modal-header">
-                    <h2 id="monitor-delete-title">确认删除</h2>
-                    <button className="modal-close" onClick={() => setShowDeleteConfirm(false)}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="modal-body">
-                    <p>确定要删除监控器「{monitor.name}」吗？</p>
-                    <p className="mt-2">删除后无法恢复，相关更新记录也会被清除。</p>
-                  </div>
-                  <div className="modal-footer">
-                    <button className="btn btn-ghost" onClick={() => setShowDeleteConfirm(false)}>
-                      取消
-                    </button>
-                    <button className="btn btn-danger" onClick={handleDelete} disabled={actionLoading}>
-                      {actionLoading ? '删除中...' : '确认删除'}
-                    </button>
-                  </div>
-                </div>
-              </div>
+                <p>确定要删除监控器「{monitor.name}」吗？</p>
+                <p className="mt-2">删除后无法恢复，相关更新记录也会被清除。</p>
+              </ConfirmModal>
             )}
             <div className="detail-panel settings-section">
               <div className="detail-left">
