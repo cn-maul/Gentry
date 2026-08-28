@@ -2,10 +2,13 @@ package fetcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Fetcher struct {
@@ -33,10 +36,36 @@ func (f *Fetcher) FetchContext(ctx context.Context, url string) (string, error) 
 
 // FetchContextWithHeaders executes a request with a small caller-provided
 // header set. Hop-by-hop and host headers are never accepted.
+// 网络层错误（超时、连接重置、DNS 等）会自动重试 maxRetries 次；
+// HTTP 状态码错误（如 404/500）不会重试，因为重试无意义且可能放大压力。
 func (f *Fetcher) FetchContextWithHeaders(ctx context.Context, url string, headers map[string]string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
+	var lastErr error
+	for attempt := 0; attempt <= f.config.maxRetries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-time.After(f.config.retryDelay):
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
+		}
+		body, err := f.fetchOnce(ctx, url, headers)
+		if err == nil {
+			return body, nil
+		}
+		lastErr = err
+		if !isRetryableNetworkError(err) {
+			return "", err
+		}
+	}
+	return "", lastErr
+}
+
+// fetchOnce 执行单次 HTTP 请求。
+func (f *Fetcher) fetchOnce(ctx context.Context, url string, headers map[string]string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return "", fmt.Errorf("创建请求失败: %w", err)
@@ -73,6 +102,20 @@ func (f *Fetcher) FetchContextWithHeaders(ctx context.Context, url string, heade
 	}
 
 	return string(body), nil
+}
+
+// isRetryableNetworkError 判断错误是否属于可重试的网络层错误。
+// context deadline exceeded（客户端超时）、连接重置、DNS 失败等均属于此类；
+// 服务端明确返回的 HTTP 状态错误不可重试。
+func isRetryableNetworkError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr)
 }
 
 /*
