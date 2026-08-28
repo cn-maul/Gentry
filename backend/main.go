@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
@@ -94,10 +95,16 @@ func getPort() string {
 	return "8080"
 }
 
-// getDBPath 读取 DB_PATH 环境变量，默认当前目录 gentry.db
+// getDBPath 读取数据库文件路径：
+//  1. DB_PATH 环境变量（完整路径）优先；
+//  2. 否则若设置了 DATA_DIR，则使用 $DATA_DIR/gentry.db（Docker 挂载数据卷场景）；
+//  3. 默认当前目录 gentry.db（本地运行）。
 func getDBPath() string {
 	if p := os.Getenv("DB_PATH"); p != "" {
 		return p
+	}
+	if dir := os.Getenv("DATA_DIR"); dir != "" {
+		return filepath.Join(dir, "gentry.db")
 	}
 	return "gentry.db"
 }

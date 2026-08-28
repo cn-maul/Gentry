@@ -35,7 +35,9 @@ WORKDIR /app
 # 复制二进制文件（前端已嵌入）
 COPY --from=builder /app/gentry .
 
-# 创建数据目录
+# 数据目录：数据库文件（gentry.db）写入此处，以便通过 VOLUME 挂载持久化；
+# 可用 DATA_DIR 环境变量覆盖（本地运行默认当前目录）
+ENV DATA_DIR=/app/data
 RUN mkdir -p /app/data
 
 EXPOSE 8080
