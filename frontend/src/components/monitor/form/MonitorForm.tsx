@@ -164,7 +164,7 @@ export default function MonitorForm({
         <summary>
           <span>
             <strong>高级设置</strong>
-            <small>通知、检查频率和分类</small>
+            <small>检查频率和分类</small>
           </span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <polyline points="9 18 15 12 9 6" />
@@ -173,12 +173,6 @@ export default function MonitorForm({
 
         <div className="advanced-content">
           <BasicMonitorForm value={form.basic} advanced groups={groups} onChange={(basic) => onUpdateForm({ ...form, basic })} />
-
-          <NotificationEditor
-            value={form.notification}
-            accounts={accounts}
-            onChange={(notification) => onUpdateForm({ ...form, notification })}
-          />
 
           <div className="validation-actions">
             <div>
@@ -205,6 +199,13 @@ export default function MonitorForm({
           placeholder="留空将自动使用网站名称"
         />
       </div>
+
+      {/* 推送账户：基础设置的一部分，位于监控名称下方 */}
+      <NotificationEditor
+        value={form.notification}
+        accounts={accounts}
+        onChange={(notification) => onUpdateForm({ ...form, notification })}
+      />
 
       <div className="start-option">
         <label className="checkbox-label">
