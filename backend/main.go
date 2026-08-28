@@ -99,14 +99,24 @@ func getPort() string {
 //  1. DB_PATH 环境变量（完整路径）优先；
 //  2. 否则若设置了 DATA_DIR，则使用 $DATA_DIR/gentry.db（Docker 挂载数据卷场景）；
 //  3. 默认当前目录 gentry.db（本地运行）。
+//
+// 若目标目录不存在则自动创建（Docker 挂载新卷或自定义 DATA_DIR 时目录可能尚未建立）。
 func getDBPath() string {
-	if p := os.Getenv("DB_PATH"); p != "" {
-		return p
+	var path string
+	switch {
+	case os.Getenv("DB_PATH") != "":
+		path = os.Getenv("DB_PATH")
+	case os.Getenv("DATA_DIR") != "":
+		path = filepath.Join(os.Getenv("DATA_DIR"), "gentry.db")
+	default:
+		path = "gentry.db"
 	}
-	if dir := os.Getenv("DATA_DIR"); dir != "" {
-		return filepath.Join(dir, "gentry.db")
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			log.Printf("[DB] 创建数据目录失败（将尝试直接打开数据库）: %v", err)
+		}
 	}
-	return "gentry.db"
+	return path
 }
 
 // setupConsoleEncoding 设置 Windows 控制台为 UTF-8 编码，确保中文正常显示
