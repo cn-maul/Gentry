@@ -147,8 +147,14 @@ func (m *Monitor) CheckNow(ctx context.Context) (CheckOutcome, error) {
 		}
 	}
 	updateMonitorStatus(m, len(updates), checkErr, time.Since(startTime))
-	if checkErr == nil && len(updates) > 0 {
-		m.sendCombinedNotification(updates)
+	if checkErr == nil {
+		// 推送所有待推送记录：既包含本轮新发现，也包含历史遗留的推送失败记录。
+		// 此前只在「发现新内容」时推送一次，一旦发送失败/被跳过，该记录已进入历史，
+		// 下次检查不再算新内容，导致「待推送」永久挂起。改为每次检查统一补推，形成重试闭环。
+		pending := m.loadPendingNotifications()
+		if len(pending) > 0 {
+			m.sendCombinedNotification(pending)
+		}
 	}
 	return outcome, checkErr
 }
@@ -383,6 +389,46 @@ func (m *Monitor) loadLastResults() ([]ExtractResult, error) {
 		}
 	}
 	return results, nil
+}
+
+// loadPendingNotifications 返回该站点所有尚未推送成功的更新记录（notified=false），
+// 用于在每次检查后统一补推。这样即使某次推送失败（网络异常、关键词未命中、
+// 推送开关临时关闭等），记录也会在后续检查中持续重试，直到推送成功。
+func (m *Monitor) loadPendingNotifications() []ExtractResult {
+	var records []database.UpdateRecord
+	if err := database.GetDB().
+		Where("site_id = ? AND notified = ?", m.site.ID, false).
+		Order("created_at asc, id asc").
+		Find(&records).Error; err != nil {
+		log.Printf("[%s] 加载待推送记录失败: %v", m.site.Name, err)
+		return nil
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	items := make([]ExtractResult, 0, len(records))
+	for _, r := range records {
+		// 优先用保存的完整 JSON 还原原始字段，保证推送内容与抓取时一致
+		if r.Content != "" {
+			var item ExtractResult
+			if err := json.Unmarshal([]byte(r.Content), &item); err == nil && len(item) > 0 {
+				items = append(items, item)
+				continue
+			}
+		}
+		// 兜底：仅用 title/url 构造（老记录可能没有 Content）
+		item := ExtractResult{}
+		if r.Title != "" {
+			item["title"] = r.Title
+		}
+		if r.URL != "" {
+			item["url"] = r.URL
+		}
+		if len(item) > 0 {
+			items = append(items, item)
+		}
+	}
+	return items
 }
 
 func (m *Monitor) saveResults(results []ExtractResult, markNotified bool) error {

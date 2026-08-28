@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/cn-maul/Gentry/database"
+	"github.com/cn-maul/Gentry/notify"
 )
 
 func setupMonitorTestDB(t *testing.T) {
@@ -169,6 +171,87 @@ func TestCheckNowSerializesConcurrentChecks(t *testing.T) {
 	}
 	if max := atomic.LoadInt32(&maxActive); max != 1 {
 		t.Errorf("fetches must be serialized, max concurrent fetches = %d", max)
+	}
+}
+
+// TestCheckRetriesPendingNotifications 验证：某次检查因推送失败留下的待推送记录，
+// 在后续检查中即使没有新内容也会被补推（防止「待推送」永久挂起）。
+func TestCheckRetriesPendingNotifications(t *testing.T) {
+	setupMonitorTestDB(t)
+
+	var pushCount atomic.Int32
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html><body><ul><li><a href="/a">公告 A</a></li></ul></body></html>`))
+	}))
+	defer page.Close()
+	webhook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pushCount.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer webhook.Close()
+
+	site := &database.Site{
+		Name: "retry-pending", URL: page.URL, Container: "ul", Item: "li", ConfigVersion: 1,
+		Fields: []database.SiteField{
+			{Name: "title", Selector: "a", Type: "text"},
+			{Name: "url", Selector: "a", Type: "attr", Attr: "href"},
+		},
+	}
+	if err := database.CreateSiteWithFields(site); err != nil {
+		t.Fatal(err)
+	}
+
+	// 配置一个 webhook 推送账户并绑定到站点
+	account := &database.NotificationAccount{
+		Name:    "test-webhook",
+		Service: "webhook",
+		ConfigJSON: fmt.Sprintf(`{"url":%q}`, webhook.URL),
+	}
+	if err := database.GetDB().Create(account).Error; err != nil {
+		t.Fatal(err)
+	}
+	site.NotifyAccountIDs = fmt.Sprintf("[%d]", account.ID)
+	if err := database.GetDB().Model(site).Update("notify_account_ids", site.NotifyAccountIDs).Error; err != nil {
+		t.Fatal(err)
+	}
+	notify.SetEnabled(true)
+	defer notify.SetEnabled(false)
+
+	m := NewDetachedMonitor(site)
+
+	// 第一次检查：建立基线（页面内容入库，notified=true，不会推送）
+	if _, err := m.CheckNow(context.Background()); err != nil {
+		t.Fatalf("first check: %v", err)
+	}
+	if pushCount.Load() != 0 {
+		t.Fatalf("baseline must not push, got %d pushes", pushCount.Load())
+	}
+
+	// 手动插入一条待推送记录，模拟「上次推送失败留下的待推送条目」
+	pending := &database.UpdateRecord{
+		SiteID: site.ID,
+		Title:  "公告 B",
+		URL:    page.URL + "/b",
+		Content: `{"title":"公告 B","url":"` + page.URL + `/b"}`,
+	}
+	if err := database.GetDB().Create(pending).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// 第二次检查：页面无新内容，但应补推遗留的待推送记录
+	if _, err := m.CheckNow(context.Background()); err != nil {
+		t.Fatalf("second check: %v", err)
+	}
+	if pushCount.Load() != 1 {
+		t.Fatalf("pending record must be pushed once, got %d", pushCount.Load())
+	}
+
+	var updated database.UpdateRecord
+	if err := database.GetDB().First(&updated, pending.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !updated.Notified {
+		t.Fatal("pending record must be marked notified after successful push")
 	}
 }
 
