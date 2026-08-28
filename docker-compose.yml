@@ -17,6 +17,8 @@ services:
       - ALLOWED_ORIGINS=*
       - API_TOKEN=${API_TOKEN:-}
       - DB_PATH=/app/data/gentry.db
+      # 后端时区，默认北京时间；可按需改为 Asia/Shanghai 之外的其他时区
+      - TZ=Asia/Shanghai
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/api/v1/health"]

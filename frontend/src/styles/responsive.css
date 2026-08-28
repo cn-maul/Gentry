@@ -3,8 +3,34 @@
 @layer components {
   /* ─── 响应式（视图级） ─── */
   @media (max-width: 1100px) {
-    .stats-strip {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+    .dashboard {
+      margin-right: 0;
+    }
+    .dashboard-body {
+      flex-direction: column;
+    }
+    .dashboard-main {
+      margin-right: 0;
+    }
+    .dashboard-side {
+      position: static;
+      width: 100%;
+      border-left: none;
+      background: none;
+      padding: 0;
+      overflow: visible;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .dashboard-side .side-title {
+      grid-column: 1 / -1;
+    }
+
+    .push-page .push-body {
+      flex-direction: column;
+    }
+    .push-page .push-right {
+      width: 100%;
     }
   }
 
@@ -57,6 +83,10 @@
       background: var(--bg-surface);
     }
 
+    .settings-page {
+      grid-template-columns: 1fr;
+    }
+
     .sidebar-brand,
     .sidebar-footer {
       display: none;
@@ -91,7 +121,7 @@
       opacity: 1;
     }
 
-    .nav-item:nth-child(n + 5) {
+    .nav-item:nth-child(n + 6) {
       display: none;
     }
 
@@ -127,7 +157,7 @@
   }
 
   @media (max-width: 640px) {
-    .stats-strip {
+    .dashboard-side {
       grid-template-columns: 1fr 1fr;
     }
 
@@ -200,7 +230,7 @@
   }
 
   @media (max-width: 480px) {
-    .stats-strip {
+    .dashboard-side {
       grid-template-columns: 1fr;
     }
   }
@@ -210,6 +240,9 @@
     html,
     body {
       overflow-x: hidden;
+    }
+    .push-page .template-actions {
+      opacity: 1;
     }
     .page-header {
       flex-direction: column;

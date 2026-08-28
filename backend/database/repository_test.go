@@ -222,3 +222,42 @@ func TestDeleteScanRuleTemplate(t *testing.T) {
 		t.Error("规则字段未级联删除")
 	}
 }
+
+// TestSetSettingUpdateAndClear 验证 SetSetting：新建、更新非空值、更新为空值（清空）都生效。
+func TestSetSettingUpdateAndClear(t *testing.T) {
+	setupTestDB(t)
+
+	// 新建
+	if err := SetSetting("k1", "v1"); err != nil {
+		t.Fatalf("create setting: %v", err)
+	}
+	v, ok := GetSetting("k1")
+	if !ok || v != "v1" {
+		t.Fatalf("after create: ok=%v v=%q, want v1", ok, v)
+	}
+
+	// 更新非空值
+	if err := SetSetting("k1", "v2"); err != nil {
+		t.Fatalf("update setting: %v", err)
+	}
+	v, _ = GetSetting("k1")
+	if v != "v2" {
+		t.Fatalf("after update: v=%q, want v2", v)
+	}
+
+	// 清空（更新为空值）——回归：旧 FirstOrCreate+Assign 实现会静默跳过
+	if err := SetSetting("k1", ""); err != nil {
+		t.Fatalf("clear setting: %v", err)
+	}
+	v, ok = GetSetting("k1")
+	if !ok || v != "" {
+		t.Fatalf("after clear: ok=%v v=%q, want empty", ok, v)
+	}
+
+	// 只应存在一行
+	var count int64
+	DB.Model(&SystemSetting{}).Where("key = ?", "k1").Count(&count)
+	if count != 1 {
+		t.Fatalf("row count = %d, want 1", count)
+	}
+}

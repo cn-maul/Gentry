@@ -10,6 +10,7 @@ import type {
   NotificationProviderMeta,
   NotificationSettings,
   NotifyAccount,
+  PagedPushLogs,
   PagedUpdates,
   QuickScanRulePayload,
   ScanPreviewResult,
@@ -86,6 +87,13 @@ export function updateNotifyAccounts(name: string, accountIDs: Array<number | st
   return client
     .put(`/monitors/${encodeURIComponent(name)}/notify-accounts`, { notify_account_ids: accountIDs || [] })
     .then((r) => r.data)
+}
+
+// 获取推送记录（时间轴）
+export function fetchPushLogs(
+  params: { page?: number; size?: number; status?: string } = {},
+): Promise<ApiEnvelope<PagedPushLogs>> {
+  return client.get('/pushlogs', { params }).then((r) => r.data)
 }
 
 // ===== 智能扫描 =====
@@ -166,6 +174,11 @@ export function deleteAccount(id: number): Promise<ApiEnvelope<unknown>> {
   return client.delete(`/settings/notification-accounts/${id}`).then((r) => r.data)
 }
 
+// 测试推送账户（发送一条测试消息验证配置）
+export function testNotifyAccount(id: number): Promise<ApiEnvelope<unknown>> {
+  return client.post(`/settings/notification-accounts/${id}/test`).then((r) => r.data)
+}
+
 // ===== 扫描规则模板 CRUD =====
 
 // 获取扫描规则模板
@@ -178,9 +191,10 @@ export function quickCreateScanRule(data: QuickScanRulePayload): Promise<ApiEnve
   return client.post('/settings/scan-rules/quick', data).then((r) => r.data)
 }
 
-// 导出/导入规则库
-export function exportScanRules(): Promise<ApiEnvelope<unknown>> {
-  return client.get('/settings/scan-rules/export').then((r) => r.data)
+// 导出/导入规则库（ids 为空时导出全部）
+export function exportScanRules(ids?: number[]): Promise<ApiEnvelope<unknown>> {
+  const params = ids && ids.length ? { ids: ids.join(',') } : undefined
+  return client.get('/settings/scan-rules/export', { params }).then((r) => r.data)
 }
 
 export function importScanRules(data: unknown): Promise<ApiEnvelope<ImportResult>> {

@@ -327,11 +327,7 @@ export default function RuleBuilder() {
     <div className="scan-rules-page rule-builder-page">
       <Toasts success={successMsg} error={pageErrorMsg} />
 
-      <PageHeader
-        backTo="/rules"
-        title="添加规则"
-        desc="用 AI 一键识别页面内容结构，或手动配置选择器与提取字段"
-      />
+      <PageHeader backTo="/rules" title="添加规则" />
 
       {/* 标签页切换 */}
       <div className="tab-bar" role="tablist" aria-label="创建方式">

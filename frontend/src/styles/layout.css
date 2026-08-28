@@ -107,23 +107,6 @@
     opacity: 1;
   }
 
-  /* 新增监控全局入口：品牌色突出显示 */
-  .nav-item.nav-add {
-    color: var(--brand);
-    background: var(--brand-soft);
-    box-shadow: inset 0 0 0 1px var(--brand-soft-border);
-    font-weight: 700;
-    margin-bottom: 0.4rem;
-  }
-  .nav-item.nav-add:hover {
-    color: var(--brand-contrast);
-    background: var(--brand);
-    box-shadow: none;
-  }
-  .nav-item.nav-add svg {
-    opacity: 1;
-  }
-
   .sidebar-footer {
     padding: 0.75rem;
     border-top: 1px solid var(--border-light);
@@ -138,26 +121,13 @@
     background: var(--bg-hover);
   }
 
-  /* 主内容 */
+  /* 主内容：左侧保留内边距（与固定导航栏留出呼吸空间），
+     右侧内边距为原来的 2.5rem 的一半（1.25rem），页面不贴右缘也不留大片空白 */
   .main-content {
     flex: 1;
     margin-left: 224px;
-    padding: 2rem 2.5rem 3rem;
+    padding: 2rem 1.25rem 3rem 2.5rem;
     min-width: 0;
-    max-width: 1240px;
-  }
-
-  /* 页面容器统一宽度：所有视图使用一致的内容宽度并居中，
-     避免设置页 720px / 新增监控 860px / 规则库 1120px 参差不齐 */
-  .dashboard,
-  .monitor-detail,
-  .push-page,
-  .add-monitor,
-  .scan-rules-page,
-  .settings-page {
-    width: 100%;
-    max-width: 1120px;
-    margin: 0 auto;
   }
 
 }

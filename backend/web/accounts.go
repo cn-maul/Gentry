@@ -16,10 +16,10 @@ import (
 
 // sensitiveKeysByService 各推送服务中需要脱敏/回填的敏感字段。
 var sensitiveKeysByService = map[string][]string{
-	"pushplus":  {"token"},
+	"pushplus":   {"token"},
 	"serverchan": {"sendkey"},
-	"webhook":   {"url"},
-	"bark":      {"key"},
+	"webhook":    {"url"},
+	"bark":       {"key"},
 }
 
 type accountRequest struct {
@@ -214,16 +214,68 @@ func listNotificationProviders(c *gin.Context) {
 	ok(c, notify.ListProviderMetadata())
 }
 
-// ===== 推送全局开关 =====
+// testNotificationAccount 向指定账户发送一条测试推送，用于验证配置是否可正常送达。
+// 不走全局推送开关（SendToAccount 直接调用各渠道），因此开关关闭时也可测试。
+func testNotificationAccount(c *gin.Context) {
+	var account database.NotificationAccount
+	if err := database.GetDB().First(&account, c.Param("id")).Error; err != nil {
+		fail(c, http.StatusNotFound, "账户不存在")
+		return
+	}
+
+	title := "Gentry 测试推送"
+	content := fmt.Sprintf("这是一条测试消息，来自推送账户「%s」（%s）\n发送时间：%s",
+		account.Name, account.Service, time.Now().Format("2006-01-02 15:04:05"))
+
+	if err := notify.SendToAccount(&account, title, content); err != nil {
+		log.Printf("[通知] 测试推送失败「%s」(%s): %v", account.Name, account.Service, err)
+		fail(c, http.StatusBadRequest, "测试推送失败: "+err.Error())
+		return
+	}
+
+	log.Printf("[通知] 测试推送成功「%s」(%s)", account.Name, account.Service)
+	ok(c, map[string]interface{}{"message": "测试推送已发送"})
+}
+
+// ===== 推送全局开关与模板 =====
 
 func getNotificationSettings(c *gin.Context) {
 	enabledVal, _ := database.GetSetting("notifications_enabled")
-	ok(c, map[string]interface{}{"enabled": enabledVal == "true"})
+	templates := database.GetPushTemplates()
+	activeTemplate, _ := database.GetSetting("push_template_active")
+
+	// 迁移旧版单模板配置（notify_title_template / notify_content_template）：
+	// 转换为命名模板并设为选中，随后清空旧键，避免两套配置并存。
+	if len(templates) == 0 {
+		oldTitle, _ := database.GetSetting("notify_title_template")
+		oldContent, _ := database.GetSetting("notify_content_template")
+		if oldTitle != "" || oldContent != "" {
+			templates = []database.PushTemplate{{
+				Name:            "我的模板",
+				TitleTemplate:   oldTitle,
+				ContentTemplate: oldContent,
+			}}
+			_ = database.SetPushTemplates(templates)
+			activeTemplate = "我的模板"
+			_ = database.SetSetting("push_template_active", activeTemplate)
+			_ = database.SetSetting("notify_title_template", "")
+			_ = database.SetSetting("notify_content_template", "")
+			log.Printf("[通知] 已将旧版推送模板迁移为命名模板「我的模板」")
+		}
+	}
+
+	ok(c, map[string]interface{}{
+		"enabled":         enabledVal == "true",
+		"templates":       templates,
+		"active_template": activeTemplate,
+	})
 }
 
 func updateNotificationSettings(c *gin.Context) {
 	var req struct {
-		Enabled bool `json:"enabled"`
+		Enabled        bool                     `json:"enabled"`
+		Templates      *[]database.PushTemplate `json:"templates"`
+		ActiveTemplate *string                  `json:"active_template"`
 	}
 	if !bindJSON(c, &req) {
 		return
@@ -232,8 +284,38 @@ func updateNotificationSettings(c *gin.Context) {
 		fail(c, http.StatusInternalServerError, "保存推送设置失败: "+err.Error())
 		return
 	}
+	// 列表/选中字段用指针区分「未传」与「清空」：未传保持不变
+	if req.Templates != nil {
+		if err := database.SetPushTemplates(*req.Templates); err != nil {
+			fail(c, http.StatusInternalServerError, "保存推送模板失败: "+err.Error())
+			return
+		}
+	}
+	if req.ActiveTemplate != nil {
+		if err := database.SetSetting("push_template_active", *req.ActiveTemplate); err != nil {
+			fail(c, http.StatusInternalServerError, "保存推送模板失败: "+err.Error())
+			return
+		}
+	}
 	notify.SetEnabled(req.Enabled)
 
-	log.Printf("[通知] 推送开关已更新: enabled=%v", req.Enabled)
+	log.Printf("[通知] 推送设置已更新: enabled=%v, templates=%d, active=%q",
+		req.Enabled, len(strPtrList(req.Templates)), strPtr(req.ActiveTemplate))
 	ok(c, nil)
+}
+
+// strPtr 返回指针指向的字符串，空指针返回空串（仅用于日志）。
+func strPtr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// strPtrList 返回指针指向的切片长度，空指针返回 0（仅用于日志）。
+func strPtrList(s *[]database.PushTemplate) []database.PushTemplate {
+	if s == nil {
+		return nil
+	}
+	return *s
 }

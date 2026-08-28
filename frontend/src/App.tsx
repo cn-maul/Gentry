@@ -5,6 +5,7 @@ import Dashboard from './views/Dashboard'
 import AddMonitor from './views/AddMonitor'
 import MonitorDetail from './views/MonitorDetail'
 import PushManagement from './views/PushManagement'
+import PushHistory from './views/PushHistory'
 import ScanRuleManagement from './views/ScanRuleManagement'
 import RuleBuilder from './views/RuleBuilder'
 import Settings from './views/Settings'
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/edit/:name" element={<AddMonitor />} />
         <Route path="/monitor/:name" element={<MonitorDetail />} />
         <Route path="/notifications" element={<PushManagement />} />
+        <Route path="/push-logs" element={<PushHistory />} />
         <Route path="/rules" element={<ScanRuleManagement />} />
         <Route path="/rules/add" element={<RuleBuilder />} />
         <Route path="/settings" element={<Settings />} />

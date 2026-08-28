@@ -153,7 +153,13 @@ func (m *Monitor) CheckNow(ctx context.Context) (CheckOutcome, error) {
 		// 下次检查不再算新内容，导致「待推送」永久挂起。改为每次检查统一补推，形成重试闭环。
 		pending := m.loadPendingNotifications()
 		if len(pending) > 0 {
-			m.sendCombinedNotification(pending)
+			items := make([]ExtractResult, 0, len(pending))
+			recordIDs := make([]uint, 0, len(pending))
+			for _, p := range pending {
+				items = append(items, p.Item)
+				recordIDs = append(recordIDs, p.ID)
+			}
+			m.sendCombinedNotification(items, recordIDs)
 		}
 	}
 	return outcome, checkErr
@@ -391,10 +397,17 @@ func (m *Monitor) loadLastResults() ([]ExtractResult, error) {
 	return results, nil
 }
 
+// pendingNotification 待推送记录及其关联的 update_record ID，
+// 推送成功后按 ID 直接标记 notified，避免依赖 title/url 匹配。
+type pendingNotification struct {
+	ID   uint
+	Item ExtractResult
+}
+
 // loadPendingNotifications 返回该站点所有尚未推送成功的更新记录（notified=false），
 // 用于在每次检查后统一补推。这样即使某次推送失败（网络异常、关键词未命中、
 // 推送开关临时关闭等），记录也会在后续检查中持续重试，直到推送成功。
-func (m *Monitor) loadPendingNotifications() []ExtractResult {
+func (m *Monitor) loadPendingNotifications() []pendingNotification {
 	var records []database.UpdateRecord
 	if err := database.GetDB().
 		Where("site_id = ? AND notified = ?", m.site.ID, false).
@@ -406,18 +419,17 @@ func (m *Monitor) loadPendingNotifications() []ExtractResult {
 	if len(records) == 0 {
 		return nil
 	}
-	items := make([]ExtractResult, 0, len(records))
+	items := make([]pendingNotification, 0, len(records))
 	for _, r := range records {
 		// 优先用保存的完整 JSON 还原原始字段，保证推送内容与抓取时一致
+		item := ExtractResult{}
 		if r.Content != "" {
-			var item ExtractResult
 			if err := json.Unmarshal([]byte(r.Content), &item); err == nil && len(item) > 0 {
-				items = append(items, item)
+				items = append(items, pendingNotification{ID: r.ID, Item: item})
 				continue
 			}
 		}
 		// 兜底：仅用 title/url 构造（老记录可能没有 Content）
-		item := ExtractResult{}
 		if r.Title != "" {
 			item["title"] = r.Title
 		}
@@ -425,7 +437,7 @@ func (m *Monitor) loadPendingNotifications() []ExtractResult {
 			item["url"] = r.URL
 		}
 		if len(item) > 0 {
-			items = append(items, item)
+			items = append(items, pendingNotification{ID: r.ID, Item: item})
 		}
 	}
 	return items
@@ -556,21 +568,89 @@ func filterByKeywords(items []ExtractResult, keywords string) []ExtractResult {
 	return matched
 }
 
-func buildNotifyContent(siteName string, items []ExtractResult) (string, string) {
-	// 推送给前端但前端不需要 content，保持原有格式
-	title := fmt.Sprintf("%s 有 %d 条更新", siteName, len(items))
-	var content strings.Builder
-	content.WriteString("最新更新内容：\n")
-	for i, item := range items {
-		fmt.Fprintf(&content, "%d. %s\n   %s\n", i+1, item["title"], item["url"])
+// notifyTemplatePlaceholders 推送模板支持的占位符。
+const (
+	placeholderSiteName = "{site_name}" // 站点名称
+	placeholderCount    = "{count}"     // 更新条数
+	placeholderItems    = "{items}"     // 编号条目列表
+	placeholderTitles   = "{titles}"    // 标题以「、」连接
+)
+
+// 程序内置的默认推送模板，未在「推送通知」页面自定义时使用。
+const (
+	defaultNotifyTitleTemplate   = "{site_name} 有 {count} 条更新"
+	defaultNotifyContentTemplate = "最新更新内容：\n{items}"
+)
+
+// renderNotifyTemplate 渲染推送模板：替换占位符；模板为空时返回零值表示使用默认格式。
+// 自定义模板渲染后为空（例如模板只含未匹配的占位符）同样视为未配置，回退默认格式。
+func renderNotifyTemplate(tmpl string, siteName string, items []ExtractResult) string {
+	if strings.TrimSpace(tmpl) == "" {
+		return ""
 	}
-	return title, content.String()
+	titleList := make([]string, 0, len(items))
+	var list strings.Builder
+	for i, item := range items {
+		if t := toString(item["title"]); t != "" {
+			titleList = append(titleList, t)
+		}
+		fmt.Fprintf(&list, "%d. %s\n   %s\n", i+1, toString(item["title"]), toString(item["url"]))
+	}
+	out := tmpl
+	out = strings.ReplaceAll(out, placeholderSiteName, siteName)
+	out = strings.ReplaceAll(out, placeholderCount, fmt.Sprintf("%d", len(items)))
+	out = strings.ReplaceAll(out, placeholderItems, strings.TrimRight(list.String(), "\n"))
+	out = strings.ReplaceAll(out, placeholderTitles, strings.Join(titleList, "、"))
+	if strings.TrimSpace(out) == "" {
+		return ""
+	}
+	return out
 }
 
-func (m *Monitor) sendCombinedNotification(items []ExtractResult) {
+// buildNotifyContent 生成推送标题与内容。模板为全局配置：从「推送通知」页保存的
+// 模板列表中取选中的模板（push_templates + push_template_active），
+// 未选中任何自定义模板时使用内置默认模板。
+func buildNotifyContent(siteName string, items []ExtractResult) (string, string) {
+	var titleTemplate, contentTemplate string
+	activeName, _ := database.GetSetting("push_template_active")
+	if activeName != "" {
+		for _, t := range database.GetPushTemplates() {
+			if t.Name == activeName {
+				titleTemplate = t.TitleTemplate
+				contentTemplate = t.ContentTemplate
+				break
+			}
+		}
+	}
+
+	title := renderNotifyTemplate(titleTemplate, siteName, items)
+	if title == "" {
+		title = renderNotifyTemplate(defaultNotifyTitleTemplate, siteName, items)
+	}
+
+	content := renderNotifyTemplate(contentTemplate, siteName, items)
+	if content == "" {
+		content = renderNotifyTemplate(defaultNotifyContentTemplate, siteName, items)
+	}
+	// 与旧默认格式保持一致：去掉因 {items} 为空等原因残留的尾部换行
+	content = strings.TrimRight(content, "\n")
+	return title, content
+}
+
+func (m *Monitor) sendCombinedNotification(items []ExtractResult, recordIDs []uint) {
 	site := m.siteSnapshot()
+
+	// 收集条目标题，供推送记录时间轴展示
+	titles := make([]string, 0, len(items))
+	for _, item := range items {
+		if t := toString(item["title"]); t != "" {
+			titles = append(titles, t)
+		}
+	}
+
 	if !notify.IsEnabled() {
 		log.Printf("[%s] 推送已关闭，跳过 %d 条通知", site.Name, len(items))
+		m.savePushLog(site, "skipped", "推送开关未开启", nil, titles, "", recordIDs)
 		return
 	}
 
@@ -579,6 +659,7 @@ func (m *Monitor) sendCombinedNotification(items []ExtractResult) {
 		matched := filterByKeywords(items, site.NotifyKeywords)
 		if len(matched) == 0 {
 			log.Printf("[%s] 关键词过滤后无匹配项，跳过推送", site.Name)
+			m.savePushLog(site, "skipped", "关键词过滤后无匹配项", nil, titles, "", recordIDs)
 			return
 		}
 		items = matched
@@ -588,23 +669,27 @@ func (m *Monitor) sendCombinedNotification(items []ExtractResult) {
 	accountIDs := site.GetNotifyAccountIDs()
 	if len(accountIDs) == 0 {
 		log.Printf("[%s] 未配置推送账户，跳过推送", site.Name)
+		m.savePushLog(site, "skipped", "未配置推送账户", nil, titles, "", recordIDs)
 		return
 	}
 
 	title, content := buildNotifyContent(site.Name, items)
 
 	var sentCount int
-	var failedAccounts []string
+	var accountNames []string
+	var failedDetail []string
 	for _, accID := range accountIDs {
 		var account database.NotificationAccount
 		if err := database.GetDB().First(&account, accID).Error; err != nil {
-			log.Printf("[%s] 推送账户 #%d 不存在，跳过", site.Name, accID)
-			failedAccounts = append(failedAccounts, fmt.Sprintf("#%d", accID))
+			msg := fmt.Sprintf("推送账户 #%d 不存在", accID)
+			log.Printf("[%s] %s，跳过", site.Name, msg)
+			failedDetail = append(failedDetail, msg)
 			continue
 		}
+		accountNames = append(accountNames, account.Name)
 		if err := notify.SendToAccount(&account, title, content); err != nil {
 			log.Printf("[%s] 推送账户「%s」(%s) 发送失败: %v", site.Name, account.Name, account.Service, err)
-			failedAccounts = append(failedAccounts, account.Name)
+			failedDetail = append(failedDetail, fmt.Sprintf("「%s」(%s): %v", account.Name, account.Service, err))
 			continue
 		}
 		sentCount++
@@ -613,36 +698,63 @@ func (m *Monitor) sendCombinedNotification(items []ExtractResult) {
 	// 全部失败时不标记
 	if sentCount == 0 {
 		log.Printf("[%s] 所有推送账户均发送失败", site.Name)
+		m.savePushLog(site, "failed", "", accountNames, titles, strings.Join(failedDetail, "；"), recordIDs)
 		return
 	}
 
-	// 部分失败时仅记录，不标记 notified，以便用户在 UI 中看到未推送状态
-	if len(failedAccounts) > 0 {
+	// 部分失败时仅记录，不标记 notified，以便用户在 UI 中看到未推送状态；
+	// 未成功的记录会在下一次检查时继续补推
+	if sentCount < len(accountIDs) {
 		log.Printf("[%s] 部分推送账户失败 (%d/%d 成功): %s",
-			site.Name, sentCount, len(accountIDs), strings.Join(failedAccounts, ", "))
+			site.Name, sentCount, len(accountIDs), strings.Join(failedDetail, ", "))
+		m.savePushLog(site, "partial",
+			fmt.Sprintf("%d/%d 个账户推送成功", sentCount, len(accountIDs)),
+			accountNames, titles, strings.Join(failedDetail, "；"), recordIDs)
+		return
 	}
 
 	// 全部成功才标记已通知，避免部分账户失败时丢失推送
-	if sentCount < len(accountIDs) {
-		log.Printf("[%s] 存在失败账户，不标记 notified，等待下次重试", site.Name)
-		return
-	}
-
-	// 推送成功后标记数据库记录为已通知
 	now := time.Now()
-	for _, item := range items {
-		itemTitle := toString(item["title"])
-		urlStr := toString(item["url"])
-		if err := database.GetDB().Model(&database.UpdateRecord{}).
-			Where("site_id = ? AND title = ? AND url = ? AND notified = ?", site.ID, itemTitle, urlStr, false).
-			Updates(map[string]interface{}{
-				"notified":    true,
-				"notified_at": now,
-			}).Error; err != nil {
-			log.Printf("[%s] 标记通知记录失败 (title=%s, url=%s): %v", site.Name, itemTitle, urlStr, err)
-		}
+	if err := database.GetDB().Model(&database.UpdateRecord{}).
+		Where("id IN ? AND notified = ?", recordIDs, false).
+		Updates(map[string]interface{}{
+			"notified":    true,
+			"notified_at": now,
+		}).Error; err != nil {
+		log.Printf("[%s] 标记通知记录失败: %v", site.Name, err)
 	}
 	log.Printf("[%s] 推送成功至 %d 个账户，已标记 %d 条记录", site.Name, sentCount, len(items))
+	m.savePushLog(site, "success", "", accountNames, titles, fmt.Sprintf("推送至 %d 个账户", sentCount), recordIDs)
+}
+
+// savePushLog 写入一条推送记录（时间轴展示用）。记录失败不影响主流程，仅打日志。
+func (m *Monitor) savePushLog(site database.Site, status, reason string, accountNames, titles []string, detail string, recordIDs []uint) {
+	namesJSON, _ := json.Marshal(accountNames)
+	if namesJSON == nil {
+		namesJSON = []byte("[]")
+	}
+	titlesJSON, _ := json.Marshal(titles)
+	if titlesJSON == nil {
+		titlesJSON = []byte("[]")
+	}
+	idsJSON, _ := json.Marshal(recordIDs)
+	if idsJSON == nil {
+		idsJSON = []byte("[]")
+	}
+	entry := &database.PushLog{
+		SiteID:       site.ID,
+		SiteName:     site.Name,
+		Status:       status,
+		Reason:       reason,
+		AccountNames: string(namesJSON),
+		ItemCount:    len(titles),
+		Titles:       string(titlesJSON),
+		Detail:       detail,
+		RecordIDs:    string(idsJSON),
+	}
+	if err := database.GetDB().Create(entry).Error; err != nil {
+		log.Printf("[%s] 写入推送记录失败: %v", site.Name, err)
+	}
 }
 
 func extractKey(item ExtractResult) string {

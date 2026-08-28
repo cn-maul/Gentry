@@ -1,6 +1,7 @@
 package database
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -36,7 +37,7 @@ func Init(dbPath string) error {
 	}
 
 	// 自动迁移 Schema
-	if err := DB.AutoMigrate(&Site{}, &SiteField{}, &UpdateRecord{}, &NotificationAccount{}, &ScanRuleTemplate{}, &ScanRuleField{}, &SystemSetting{}, &Category{}); err != nil {
+	if err := DB.AutoMigrate(&Site{}, &SiteField{}, &UpdateRecord{}, &NotificationAccount{}, &PushLog{}, &ScanRuleTemplate{}, &ScanRuleField{}, &SystemSetting{}, &Category{}); err != nil {
 		return err
 	}
 
@@ -103,7 +104,41 @@ func GetSetting(key string) (string, bool) {
 	return s.Value, true
 }
 
-// SetSetting 设置系统设置
+// SetSetting 设置系统设置（不存在则创建，存在则更新）。
+// 注意不能用 FirstOrCreate+Assign 实现：Assign 更新时跳过零值，
+// 导致把已存在的值清空（如恢复默认模板传空串）时静默失败。
 func SetSetting(key, value string) error {
-	return DB.Where("key = ?", key).Assign(SystemSetting{Value: value}).FirstOrCreate(&SystemSetting{Key: key}).Error
+	result := DB.Model(&SystemSetting{}).Where("key = ?", key).Update("value", value)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected > 0 {
+		return nil
+	}
+	return DB.Create(&SystemSetting{Key: key, Value: value}).Error
+}
+
+// GetPushTemplates 读取已保存的推送模板列表（key: push_templates）。
+func GetPushTemplates() []PushTemplate {
+	raw, _ := GetSetting("push_templates")
+	if raw == "" {
+		return nil
+	}
+	var list []PushTemplate
+	if err := json.Unmarshal([]byte(raw), &list); err != nil {
+		return nil
+	}
+	return list
+}
+
+// SetPushTemplates 保存推送模板列表。
+func SetPushTemplates(templates []PushTemplate) error {
+	if templates == nil {
+		templates = []PushTemplate{}
+	}
+	data, err := json.Marshal(templates)
+	if err != nil {
+		return err
+	}
+	return SetSetting("push_templates", string(data))
 }

@@ -40,6 +40,13 @@ COPY --from=builder /app/gentry .
 ENV DATA_DIR=/app/data
 RUN mkdir -p /app/data
 
+# 时区：安装 tzdata 并默认使用北京时间（Asia/Shanghai）。
+# Alpine 基础镜像不含时区数据库，若不安装 tzdata，Go 的 time.Local 恒为 UTC，
+# 后端记录的 created_at/检查时间等全部会变成 UTC+0。
+# 部署时仍可通过 docker-compose 的 TZ 环境变量覆盖。
+ENV TZ=Asia/Shanghai
+RUN apk add --no-cache tzdata
+
 EXPOSE 8080
 
 VOLUME ["/app/data"]

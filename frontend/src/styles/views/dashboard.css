@@ -1,6 +1,57 @@
 /* 监控总览：统计条 + 空状态提示 */
 
 @layer components {
+  /* 总览页用负右边距抵消主内容的右内边距（1.25rem），
+     让中间列 + 右侧固定边栏一直贴到视口右缘 */
+  .dashboard {
+    margin: 0 -1.25rem 0 0;
+  }
+
+  /* ===== 总览页双栏布局（中间监控列表 + 右侧总览边栏） ===== */
+  .dashboard-body {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+
+  .dashboard-main {
+    flex: 1;
+    min-width: 0;
+    /* 为右侧固定边栏让位，并在内容与边栏之间留出 1.5rem 间距，
+       避免列表和操作按钮紧贴边栏 */
+    margin-right: calc(280px + 1.5rem);
+  }
+
+  /* 右侧总览边栏：与左侧导航栏对称的完整侧边栏（贴右缘、带分隔线） */
+  .dashboard-side {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 280px;
+    background: var(--bg-surface);
+    border-left: 1px solid var(--border);
+    padding: 2rem 1.25rem;
+    overflow-y: auto;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .dashboard-side .side-title {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.4px;
+    margin: 0.25rem 0 0;
+  }
+
+  /* 分类 chips 内嵌到工具栏同一行时，去掉独立行的外边距 */
+  .dashboard-toolbar .category-chips {
+    margin: 0;
+  }
+
   /* ===== 概览统计条（Dashboard） ===== */
   .stats-strip {
     display: grid;

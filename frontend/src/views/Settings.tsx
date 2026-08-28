@@ -98,7 +98,7 @@ export default function Settings() {
 
   return (
     <div className="settings-page">
-      <PageHeader title="设置" desc="AI 识别、网络更新与系统信息" />
+      <PageHeader title="设置" />
 
       <section className="settings-section">
         <div className="section-header">

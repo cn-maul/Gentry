@@ -4,14 +4,14 @@ import {
   createAccount,
   updateAccount,
   deleteAccount,
+  testNotifyAccount,
   fetchNotificationSettings,
   updateNotificationSettings,
   fetchNotificationProviders,
 } from '../api/monitors'
-import type { NotifyAccount, NotificationProviderMeta } from '../api/types'
+import type { NotifyAccount, NotificationProviderMeta, PushTemplate } from '../api/types'
 import { useToastMessages } from '../hooks/useToastMessages'
 import PageHeader from '../components/ui/PageHeader'
-import EmptyState from '../components/ui/EmptyState'
 import LoadingState from '../components/ui/LoadingState'
 import Toasts from '../components/ui/Toasts'
 import Modal from '../components/ui/Modal'
@@ -40,7 +40,9 @@ function createEmptyForm(): AccountForm {
   return {
     name: '',
     service: 'pushplus',
-    config: { token: '', channel: 'mail', template: '', url: '', sendkey: '', key: '', server: '', group: '', sound: '' },
+    // channel 留空让 pushplus 走默认的 wechat（微信公众号）渠道；
+    // 不要默认 mail——mail 渠道需要先在 pushplus 后台配置渠道编码，否则推送失败
+    config: { token: '', channel: '', template: '', url: '', sendkey: '', key: '', server: '', group: '', sound: '' },
   }
 }
 
@@ -50,6 +52,13 @@ export default function PushManagement() {
   const [loading, setLoading] = useState(true)
   const [accounts, setAccounts] = useState<NotifyAccount[]>([])
   const [globalEnabled, setGlobalEnabled] = useState(false)
+  const [templates, setTemplates] = useState<PushTemplate[]>([])
+  const [activeTemplate, setActiveTemplate] = useState('')
+  const [savingTemplate, setSavingTemplate] = useState(false)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [templateForm, setTemplateForm] = useState<PushTemplate>({ name: '', title_template: '', content_template: '' })
+  const [editingTemplateName, setEditingTemplateName] = useState<string | null>(null)
+  const [testingId, setTestingId] = useState<number | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [editingAccount, setEditingAccount] = useState<NotifyAccount | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<NotifyAccount | null>(null)
@@ -85,7 +94,11 @@ export default function PushManagement() {
         fetchNotificationProviders().catch(() => ({ code: -1, message: '', data: {} as Record<string, NotificationProviderMeta> })),
       ])
       if (accts.code === 0) setAccounts(accts.data || [])
-      if (settings.code === 0) setGlobalEnabled(settings.data?.enabled || false)
+      if (settings.code === 0) {
+        setGlobalEnabled(settings.data?.enabled || false)
+        setTemplates(settings.data?.templates || [])
+        setActiveTemplate(settings.data?.active_template || '')
+      }
       if (providerRes.code === 0) setProviders(providerRes.data || {})
     } catch (e) {
       showError('加载失败: ' + (e instanceof Error ? e.message : ''))
@@ -108,6 +121,81 @@ export default function PushManagement() {
     }
   }
 
+  // ===== 推送模板管理 =====
+
+  function openTemplateCreate() {
+    setEditingTemplateName(null)
+    setTemplateForm({ name: '', title_template: '', content_template: '' })
+    setShowTemplateModal(true)
+  }
+
+  function openTemplateEdit(tpl: PushTemplate) {
+    setEditingTemplateName(tpl.name)
+    setTemplateForm({ name: tpl.name, title_template: tpl.title_template, content_template: tpl.content_template })
+    setShowTemplateModal(true)
+  }
+
+  // 保存（新增或编辑）模板：整表提交，同时把开关状态一并带上避免覆盖
+  async function saveTemplate() {
+    const name = templateForm.name.trim()
+    if (!name) {
+      showError('请输入模板名称')
+      return
+    }
+    if (templates.some((t) => t.name === name && t.name !== editingTemplateName)) {
+      showError(`已存在同名模板「${name}」`)
+      return
+    }
+    setSavingTemplate(true)
+    try {
+      const newTpl: PushTemplate = {
+        name,
+        title_template: templateForm.title_template,
+        content_template: templateForm.content_template,
+      }
+      const next = editingTemplateName !== null ? templates.map((t) => (t.name === editingTemplateName ? newTpl : t)) : [...templates, newTpl]
+      // 编辑了当前选中的模板（含重命名）时，选中项跟随
+      const nextActive = editingTemplateName !== null && activeTemplate === editingTemplateName ? name : activeTemplate
+      await updateNotificationSettings({ enabled: globalEnabled, templates: next, active_template: nextActive })
+      setTemplates(next)
+      setActiveTemplate(nextActive)
+      showSuccess('推送模板已保存')
+      setShowTemplateModal(false)
+    } catch (e) {
+      showError('保存失败: ' + (e instanceof Error ? e.message : ''))
+    } finally {
+      setSavingTemplate(false)
+    }
+  }
+
+  // 选中某个模板（name 为空 = 使用内置默认模板）
+  async function selectActiveTemplate(name: string) {
+    try {
+      await updateNotificationSettings({ enabled: globalEnabled, active_template: name })
+      setActiveTemplate(name)
+      showSuccess(name ? `已切换模板：${name}` : '已切换为默认模板')
+    } catch (e) {
+      showError('切换失败: ' + (e instanceof Error ? e.message : ''))
+    }
+  }
+
+  async function deleteTemplate(tpl: PushTemplate) {
+    if (!window.confirm(`确定删除模板「${tpl.name}」吗？`)) return
+    setSavingTemplate(true)
+    try {
+      const next = templates.filter((t) => t.name !== tpl.name)
+      const nextActive = activeTemplate === tpl.name ? '' : activeTemplate
+      await updateNotificationSettings({ enabled: globalEnabled, templates: next, active_template: nextActive })
+      setTemplates(next)
+      setActiveTemplate(nextActive)
+      showSuccess('模板已删除')
+    } catch (e) {
+      showError('删除失败: ' + (e instanceof Error ? e.message : ''))
+    } finally {
+      setSavingTemplate(false)
+    }
+  }
+
   function openCreate() {
     setEditingAccount(null)
     setForm(createEmptyForm())
@@ -118,7 +206,7 @@ export default function PushManagement() {
   function openEdit(acc: NotifyAccount) {
     setEditingAccount(acc)
     const cfg = (acc.config || {}) as Partial<AccountConfig>
-    const defaultChannel = acc.service === 'pushplus' ? 'mail' : ''
+    const defaultChannel = ''
     setForm({
       name: acc.name,
       service: acc.service,
@@ -148,6 +236,18 @@ export default function PushManagement() {
       showSuccess(`「${acc.name}」已删除`)
     } catch (e) {
       showError('删除失败: ' + (e instanceof Error ? e.message : ''))
+    }
+  }
+
+  async function handleTestAccount(acc: NotifyAccount) {
+    setTestingId(acc.id)
+    try {
+      await testNotifyAccount(acc.id)
+      showSuccess(`「${acc.name}」测试推送已发送，请注意查收`)
+    } catch (e) {
+      showError(`「${acc.name}」测试推送失败: ` + (e instanceof Error ? e.message : ''))
+    } finally {
+      setTestingId(null)
     }
   }
 
@@ -199,7 +299,6 @@ export default function PushManagement() {
     <div className="push-page">
       <PageHeader
         title="推送通知"
-        desc="配置推送渠道与全局开关；每个监控器可独立选择接收账户"
         actions={
           <button className="btn btn-primary" onClick={openCreate}>
             新增账户
@@ -211,80 +310,174 @@ export default function PushManagement() {
 
       {loading ? (
         <LoadingState text="加载中..." />
-      ) : accounts.length === 0 ? (
-        <EmptyState
-          icon="🔔"
-          title="还没有推送账户"
-          desc="创建账户后，可在每个监控器中独立选择启用哪些账户"
-          action={
-            <button className="btn btn-primary" onClick={openCreate}>
-              新增账户
-            </button>
-          }
-        />
       ) : (
-        <>
-          <div className="settings-section">
-            <div className="section-header">
-              <h2>全局推送开关</h2>
-            </div>
-            <div className="setting-item">
-              <div className="setting-info">
-                <div className="setting-label">启用推送</div>
-                <div className="setting-desc">关闭后所有监控器都不会发送推送</div>
+        <div className="push-body">
+          {/* ═══ 左栏：推送账户列表 ═══ */}
+          <div className="push-left">
+            <div className="settings-section">
+              <div className="section-header row">
+                <h2>推送账户（{accounts.length}）</h2>
+                <button className="btn btn-sm btn-primary" onClick={openCreate}>
+                  新增账户
+                </button>
               </div>
-              <div className="setting-control">
-                <label className="toggle">
-                  <input
-                    type="checkbox"
-                    checked={globalEnabled}
-                    onChange={(e) => {
-                      setGlobalEnabled(e.target.checked)
-                      saveGlobalEnabled(e.target.checked)
-                    }}
-                  />
-                  <span className="toggle-track"></span>
-                </label>
-              </div>
+
+              {accounts.length === 0 ? (
+                <p className="hint">还没有推送账户，点击右上角「新增账户」创建</p>
+              ) : (
+                accounts.map((acc) => (
+                  <div key={acc.id} className="account-card" onClick={() => openEdit(acc)} title="点击编辑账户">
+                    <div className="account-header">
+                      <div className="account-info">
+                        <span className="account-name">{acc.name}</span>
+                        <span className={`service-tag badge-${acc.service}`}>{serviceLabel(acc.service)}</span>
+                      </div>
+                      <div className="account-actions">
+                        <button
+                          className="btn btn-sm btn-ghost"
+                          disabled={testingId === acc.id}
+                          title="发送一条测试推送，验证配置是否可正常送达"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleTestAccount(acc)
+                          }}
+                        >
+                          {testingId === acc.id ? '测试中...' : '测试推送'}
+                        </button>
+                        <button
+                          className="btn-icon"
+                          title="编辑"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openEdit(acc)
+                          }}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </button>
+                        <button
+                          className="btn-icon btn-icon-danger"
+                          title="删除"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDeleteTarget(acc)
+                          }}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
-          <div className="settings-section">
-            <div className="section-header">
-              <h2>推送账户（{accounts.length}）</h2>
-              <p className="section-desc">每个账户独立配置，可在监控器详情中选用</p>
-            </div>
-
-            {accounts.map((acc) => (
-              <div key={acc.id} className="account-card">
-                <div className="account-header">
-                  <div className="account-info">
-                    <span className="account-name">{acc.name}</span>
-                    <span className={`service-tag badge-${acc.service}`}>{serviceLabel(acc.service)}</span>
-                  </div>
-                  <div className="account-actions">
-                    <button className="btn-icon" title="编辑" onClick={() => openEdit(acc)}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                    </button>
-                    <button className="btn-icon btn-icon-danger" title="删除" onClick={() => setDeleteTarget(acc)}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                    </button>
-                  </div>
+          {/* ═══ 右栏：推送设置 + 推送模板 ═══ */}
+          <div className="push-right">
+            <div className="settings-section">
+              <div className="section-header">
+                <h2>推送设置</h2>
+              </div>
+              <div className="setting-item">
+                <div className="setting-info">
+                  <div className="setting-label">启用推送</div>
+                  <div className="setting-desc">关闭后所有监控器都不会发送推送</div>
                 </div>
-                <div className="account-status">
-                  <span className="status-dot-ok" />
-                  <span className="status-text">配置正常</span>
+                <div className="setting-control">
+                  <label className="toggle">
+                    <input
+                      type="checkbox"
+                      checked={globalEnabled}
+                      onChange={(e) => {
+                        setGlobalEnabled(e.target.checked)
+                        saveGlobalEnabled(e.target.checked)
+                      }}
+                    />
+                    <span className="toggle-track"></span>
+                  </label>
                 </div>
               </div>
-            ))}
+            </div>
+
+            <div className="settings-section">
+              <div className="section-header row">
+                <h2>推送模板</h2>
+                <button className="btn btn-sm btn-ghost" onClick={openTemplateCreate}>
+                  新增
+                </button>
+              </div>
+              <p className="section-desc">点击列表项选用模板，点击「新增」创建</p>
+
+              {/* 内置默认模板：始终可选，不可编辑/删除 */}
+              <div
+                className={`template-item${activeTemplate === '' ? ' active' : ''}`}
+                title="点击选用"
+                onClick={() => selectActiveTemplate('')}
+              >
+                <div className="template-item-head">
+                  <span className="template-radio" />
+                  <span className="template-name">默认模板</span>
+                </div>
+                <span className="template-value">
+                  标题 {`{site_name} 有 {count} 条更新`} · 内容 {`最新更新内容：{items}`}
+                </span>
+              </div>
+
+              {templates.map((tpl) => (
+                <div
+                  key={tpl.name}
+                  className={`template-item${activeTemplate === tpl.name ? ' active' : ''}`}
+                  title="点击选用"
+                  onClick={() => selectActiveTemplate(tpl.name)}
+                >
+                  <div className="template-item-head">
+                    <span className="template-radio" />
+                    <span className="template-name">{tpl.name}</span>
+                    <span className="template-actions">
+                      <button
+                        className="btn-icon"
+                        title="编辑模板"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openTemplateEdit(tpl)
+                        }}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
+                      <button
+                        className="btn-icon btn-icon-danger"
+                        title="删除模板"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteTemplate(tpl)
+                        }}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                    </span>
+                  </div>
+                  <span className="template-value">
+                    {(tpl.title_template || '默认标题')} · {(tpl.content_template || '默认内容')}
+                  </span>
+                </div>
+              ))}
+
+              {templates.length === 0 && <p className="hint">还没有自定义模板，点「新增」创建</p>}
+            </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* Create/Edit Modal */}
@@ -450,6 +643,55 @@ export default function PushManagement() {
               )}
 
               {modalError && <div className="form-error">{modalError}</div>}
+      </Modal>
+
+      {/* 推送模板 Modal */}
+      <Modal
+        open={showTemplateModal}
+        title={editingTemplateName !== null ? '编辑推送模板' : '新增推送模板'}
+        onClose={() => setShowTemplateModal(false)}
+        footer={
+          <>
+            <button className="btn btn-ghost" onClick={() => setShowTemplateModal(false)}>
+              取消
+            </button>
+            <button className="btn btn-primary" disabled={savingTemplate} onClick={saveTemplate}>
+              {savingTemplate ? '保存中...' : '保存'}
+            </button>
+          </>
+        }
+      >
+        <div className="form-group">
+          <label>模板名称</label>
+          <input
+            value={templateForm.name}
+            onChange={(e) => setTemplateForm((prev) => ({ ...prev, name: e.target.value }))}
+            className="form-input"
+            placeholder="如 正式公告、简洁通知"
+          />
+        </div>
+        <div className="form-group">
+          <label>标题模板</label>
+          <input
+            value={templateForm.title_template}
+            onChange={(e) => setTemplateForm((prev) => ({ ...prev, title_template: e.target.value }))}
+            className="form-input"
+            placeholder="默认：{site_name} 有 {count} 条更新"
+          />
+        </div>
+        <div className="form-group">
+          <label>内容模板</label>
+          <textarea
+            value={templateForm.content_template}
+            onChange={(e) => setTemplateForm((prev) => ({ ...prev, content_template: e.target.value }))}
+            className="form-input"
+            rows={4}
+            placeholder={'默认：最新更新内容：\n{items}'}
+          />
+        </div>
+        <p className="hint">
+          可用变量：{'{site_name}'}（站点名） {'{count}'}（更新条数） {'{items}'}（条目列表） {'{titles}'}（标题合集）；留空使用内置默认模板
+        </p>
       </Modal>
 
       {/* Delete Confirm */}

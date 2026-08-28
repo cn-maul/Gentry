@@ -1,0 +1,221 @@
+/* 推送记录时间轴 */
+
+@layer components {
+  .push-history-page .push-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .push-history-page .push-timeline {
+    position: relative;
+    padding-left: 2rem;
+    margin-bottom: 1.25rem;
+  }
+
+  /* 竖向时间线 */
+  .push-history-page .push-timeline::before {
+    content: "";
+    position: absolute;
+    left: 9px;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    background: var(--border-light);
+    border-radius: 1px;
+  }
+
+  .push-history-page .push-item {
+    position: relative;
+    margin-bottom: 0.9rem;
+  }
+
+  .push-history-page .push-item:last-child {
+    margin-bottom: 0;
+  }
+
+  /* 状态圆点 */
+  .push-history-page .push-node {
+    position: absolute;
+    left: 1px;
+    top: 1.1rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    border: 3px solid var(--bg-base);
+    box-shadow: 0 0 0 1px var(--border-light);
+  }
+  .push-history-page .push-item.success .push-node {
+    background: var(--success);
+  }
+  .push-history-page .push-item.partial .push-node {
+    background: var(--warning);
+  }
+  .push-history-page .push-item.failed .push-node {
+    background: var(--error);
+  }
+
+  .push-history-page .push-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 0 1rem;
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+    height: 68px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+  }
+  .push-history-page .push-card:hover {
+    border-color: var(--border);
+    box-shadow: var(--shadow);
+  }
+
+  .push-history-page .push-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .push-history-page .push-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+
+  .push-history-page .push-chip {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 0.1rem 0.55rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+
+  .push-history-page .push-site {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .push-history-page .push-accounts,
+  .push-history-page .push-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .push-history-page .push-detail-btn {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .push-history-page .push-reason {
+    margin-top: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--warning);
+    background: var(--warning-bg);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.6rem;
+  }
+
+  .push-history-page .push-detail {
+    margin-top: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    background: var(--bg-elevated);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.6rem;
+    word-break: break-all;
+    white-space: pre-wrap;
+  }
+  .push-history-page .push-item.failed .push-detail {
+    color: var(--error);
+    background: var(--error-bg);
+  }
+
+  .push-history-page .push-titles {
+    margin: 0.55rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    border-top: 1px dashed var(--border-light);
+    padding-top: 0.55rem;
+  }
+
+  .push-history-page .push-titles li {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-left: 0.75rem;
+    position: relative;
+  }
+  .push-history-page .push-titles li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.5rem;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+
+  /* ===== 推送详情弹窗 ===== */
+  .push-history-page .push-detail-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .push-history-page .push-detail-grid {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 0.5rem 1rem;
+  }
+
+  .push-history-page .push-detail-row {
+    display: contents;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    word-break: break-all;
+  }
+
+  .push-history-page .push-detail-label {
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  .push-history-page .push-detail-block h4 {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin: 0 0 0.5rem;
+  }
+
+  /* 弹窗内标题列表允许完整换行显示，不做单行截断 */
+  .push-history-page .push-detail-block .push-titles li {
+    white-space: normal;
+    overflow: visible;
+    padding-left: 0.85rem;
+    margin-bottom: 0.15rem;
+  }
+}

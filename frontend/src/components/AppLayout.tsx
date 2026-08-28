@@ -38,13 +38,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="sidebar-nav">
-          <NavLink to="/add" className="nav-item nav-add">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-            <span>新增监控</span>
-          </NavLink>
           <NavLink to="/" end className={navItemClass}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
               <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -69,6 +62,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
             <span>推送通知</span>
+          </NavLink>
+          <NavLink to="/push-logs" className={navItemClass}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            <span>推送记录</span>
           </NavLink>
           <NavLink to="/settings" className={navItemClass}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">

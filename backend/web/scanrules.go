@@ -409,8 +409,23 @@ func quickCreateScanRule(c *gin.Context) {
 }
 
 func exportScanRules(c *gin.Context) {
+	// 支持 ?ids=1,3,5 仅导出选中的规则；不带 ids 时导出全部（向后兼容）。
+	db := database.GetDB().Model(&database.ScanRuleTemplate{})
+	if idsRaw := strings.TrimSpace(c.Query("ids")); idsRaw != "" {
+		var ids []uint
+		for _, part := range strings.Split(idsRaw, ",") {
+			id, err := strconv.ParseUint(strings.TrimSpace(part), 10, 32)
+			if err != nil {
+				fail(c, http.StatusBadRequest, "ids 参数无效: "+err.Error())
+				return
+			}
+			ids = append(ids, uint(id))
+		}
+		db = db.Where("id IN ?", ids)
+	}
+
 	var rules []database.ScanRuleTemplate
-	if err := database.GetDB().Preload("Fields").Order("priority desc, created_at asc").Find(&rules).Error; err != nil {
+	if err := db.Preload("Fields").Order("priority desc, created_at asc").Find(&rules).Error; err != nil {
 		fail(c, http.StatusInternalServerError, "导出扫描规则失败: "+err.Error())
 		return
 	}

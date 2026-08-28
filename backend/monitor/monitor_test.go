@@ -203,8 +203,8 @@ func TestCheckRetriesPendingNotifications(t *testing.T) {
 
 	// 配置一个 webhook 推送账户并绑定到站点
 	account := &database.NotificationAccount{
-		Name:    "test-webhook",
-		Service: "webhook",
+		Name:       "test-webhook",
+		Service:    "webhook",
 		ConfigJSON: fmt.Sprintf(`{"url":%q}`, webhook.URL),
 	}
 	if err := database.GetDB().Create(account).Error; err != nil {
@@ -229,9 +229,9 @@ func TestCheckRetriesPendingNotifications(t *testing.T) {
 
 	// 手动插入一条待推送记录，模拟「上次推送失败留下的待推送条目」
 	pending := &database.UpdateRecord{
-		SiteID: site.ID,
-		Title:  "公告 B",
-		URL:    page.URL + "/b",
+		SiteID:  site.ID,
+		Title:   "公告 B",
+		URL:     page.URL + "/b",
 		Content: `{"title":"公告 B","url":"` + page.URL + `/b"}`,
 	}
 	if err := database.GetDB().Create(pending).Error; err != nil {
@@ -299,5 +299,201 @@ func TestFirstBaselineRecordsMarkedNotified(t *testing.T) {
 		if r.Title == "新增 C" && r.Notified {
 			t.Fatalf("new item %q must remain unnotified", r.Title)
 		}
+	}
+}
+
+// TestPushLogWrittenOnSuccess 验证：推送全部成功后写入一条 status=success 的推送记录，
+// 且关联的 update_record 被标记为已通知。
+func TestPushLogWrittenOnSuccess(t *testing.T) {
+	setupMonitorTestDB(t)
+
+	webhook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer webhook.Close()
+
+	site := &database.Site{Name: "pushlog-success", URL: "https://example.com"}
+	if err := database.GetDB().Create(site).Error; err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+	account := &database.NotificationAccount{
+		Name:       "test-webhook",
+		Service:    "webhook",
+		ConfigJSON: fmt.Sprintf(`{"url":%q}`, webhook.URL),
+	}
+	if err := database.GetDB().Create(account).Error; err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	site.NotifyAccountIDs = fmt.Sprintf("[%d]", account.ID)
+	if err := database.GetDB().Model(site).Update("notify_account_ids", site.NotifyAccountIDs).Error; err != nil {
+		t.Fatalf("bind account: %v", err)
+	}
+	notify.SetEnabled(true)
+	defer notify.SetEnabled(false)
+
+	record := &database.UpdateRecord{
+		SiteID:  site.ID,
+		Title:   "公告 A",
+		URL:     "https://example.com/a",
+		Content: `{"title":"公告 A","url":"https://example.com/a"}`,
+	}
+	if err := database.GetDB().Create(record).Error; err != nil {
+		t.Fatalf("create record: %v", err)
+	}
+
+	m := NewDetachedMonitor(site)
+	items := []ExtractResult{{"title": "公告 A", "url": "https://example.com/a"}}
+	m.sendCombinedNotification(items, []uint{record.ID})
+
+	var log database.PushLog
+	if err := database.GetDB().First(&log).Error; err != nil {
+		t.Fatalf("push log not written: %v", err)
+	}
+	if log.Status != "success" {
+		t.Fatalf("push log status = %q, want success", log.Status)
+	}
+	if log.SiteName != site.Name || log.ItemCount != 1 {
+		t.Fatalf("push log site=%q count=%d", log.SiteName, log.ItemCount)
+	}
+
+	var updated database.UpdateRecord
+	if err := database.GetDB().First(&updated, record.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !updated.Notified {
+		t.Fatal("record must be marked notified after successful push")
+	}
+}
+
+// TestPushLogWrittenOnSkipped 验证：推送开关关闭时写入一条 status=skipped 的推送记录，
+// 且关联记录不被标记（等待用户开启开关后补推）。
+func TestPushLogWrittenOnSkipped(t *testing.T) {
+	setupMonitorTestDB(t)
+
+	site := &database.Site{Name: "pushlog-skipped", URL: "https://example.com"}
+	if err := database.GetDB().Create(site).Error; err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+	record := &database.UpdateRecord{
+		SiteID:  site.ID,
+		Title:   "公告 B",
+		URL:     "https://example.com/b",
+		Content: `{"title":"公告 B","url":"https://example.com/b"}`,
+	}
+	if err := database.GetDB().Create(record).Error; err != nil {
+		t.Fatalf("create record: %v", err)
+	}
+	// 确保开关关闭（默认即关闭，此处显式设置以便测试独立）
+	notify.SetEnabled(false)
+	defer notify.SetEnabled(false)
+
+	m := NewDetachedMonitor(site)
+	items := []ExtractResult{{"title": "公告 B", "url": "https://example.com/b"}}
+	m.sendCombinedNotification(items, []uint{record.ID})
+
+	var log database.PushLog
+	if err := database.GetDB().First(&log).Error; err != nil {
+		t.Fatalf("push log not written: %v", err)
+	}
+	if log.Status != "skipped" {
+		t.Fatalf("push log status = %q, want skipped", log.Status)
+	}
+	if log.Reason == "" {
+		t.Fatal("skipped push log must carry a reason")
+	}
+
+	var updated database.UpdateRecord
+	if err := database.GetDB().First(&updated, record.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if updated.Notified {
+		t.Fatal("record must remain unnotified when push is skipped")
+	}
+}
+
+// TestBuildNotifyContentDefault 验证：未配置模板时使用内置默认标题/内容格式。
+func TestBuildNotifyContentDefault(t *testing.T) {
+	setupMonitorTestDB(t)
+	items := []ExtractResult{
+		{"title": "公告 A", "url": "https://example.com/a"},
+		{"title": "公告 B", "url": "https://example.com/b"},
+	}
+
+	title, content := buildNotifyContent("测试站点", items)
+	if title != "测试站点 有 2 条更新" {
+		t.Fatalf("default title = %q", title)
+	}
+	want := "最新更新内容：\n1. 公告 A\n   https://example.com/a\n2. 公告 B\n   https://example.com/b"
+	if content != want {
+		t.Fatalf("default content = %q, want %q", content, want)
+	}
+}
+
+// TestBuildNotifyContentTemplate 验证：选中的模板正确替换全部占位符，
+// 未选中的模板不生效。
+func TestBuildNotifyContentTemplate(t *testing.T) {
+	setupMonitorTestDB(t)
+	templates := []database.PushTemplate{
+		{Name: "简洁", TitleTemplate: "{site_name} 有 {count} 条更新", ContentTemplate: "最新更新内容：\n{items}"},
+		{Name: "正式", TitleTemplate: "{site_name} 新增 {count} 条公告", ContentTemplate: "公告汇总（{titles}）\n{items}\n——来自 {site_name}"},
+	}
+	if err := database.SetPushTemplates(templates); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SetSetting("push_template_active", "正式"); err != nil {
+		t.Fatal(err)
+	}
+	items := []ExtractResult{
+		{"title": "公告 A", "url": "https://example.com/a"},
+		{"title": "公告 B", "url": "https://example.com/b"},
+	}
+
+	title, content := buildNotifyContent("测试站点", items)
+	if title != "测试站点 新增 2 条公告" {
+		t.Fatalf("template title = %q", title)
+	}
+	want := "公告汇总（公告 A、公告 B）\n1. 公告 A\n   https://example.com/a\n2. 公告 B\n   https://example.com/b\n——来自 测试站点"
+	if content != want {
+		t.Fatalf("template content = %q, want %q", content, want)
+	}
+
+	// 切换选中到另一个模板
+	if err := database.SetSetting("push_template_active", "简洁"); err != nil {
+		t.Fatal(err)
+	}
+	title, _ = buildNotifyContent("测试站点", items)
+	if title != "测试站点 有 2 条更新" {
+		t.Fatalf("switched template title = %q", title)
+	}
+}
+
+// TestBuildNotifyContentEmptyTemplate 验证：模板渲染结果为空（如 {items} 但无条目）时回退默认格式；
+// 未知占位符会原样保留（便于用户发现拼写错误），不会触发回退。
+func TestBuildNotifyContentEmptyTemplate(t *testing.T) {
+	setupMonitorTestDB(t)
+	templates := []database.PushTemplate{
+		{Name: "空内容", ContentTemplate: "{items}"},
+		{Name: "未知变量", TitleTemplate: "{unknown_var}"},
+	}
+	if err := database.SetPushTemplates(templates); err != nil {
+		t.Fatal(err)
+	}
+
+	// 无条目时 {items} 渲染为空 → 内容回退默认
+	if err := database.SetSetting("push_template_active", "空内容"); err != nil {
+		t.Fatal(err)
+	}
+	_, content := buildNotifyContent("测试站点", nil)
+	if content != "最新更新内容：" {
+		t.Fatalf("empty template must fall back to default content, got %q", content)
+	}
+
+	// 未知占位符原样保留
+	if err := database.SetSetting("push_template_active", "未知变量"); err != nil {
+		t.Fatal(err)
+	}
+	title, _ := buildNotifyContent("测试站点", []ExtractResult{{"title": "公告 A", "url": "https://example.com/a"}})
+	if title != "{unknown_var}" {
+		t.Fatalf("unknown placeholder must be kept literal, got %q", title)
 	}
 }

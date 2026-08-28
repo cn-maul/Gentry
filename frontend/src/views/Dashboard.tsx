@@ -136,8 +136,6 @@ export default function Dashboard() {
 
   // 系统统计（15s 轮询）
   const [stats, setStats] = useState<Stats>(EMPTY_STATS)
-  const [lastUpdated, setLastUpdated] = useState<number | null>(null)
-  const [, setTick] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -146,7 +144,6 @@ export default function Dashboard() {
         const res = await fetchStats()
         if (!cancelled && res.code === 0 && res.data) {
           setStats((prev) => ({ ...prev, ...res.data }))
-          setLastUpdated(Date.now())
         }
       } catch {
         /* 静默：保留上次数据 */
@@ -154,21 +151,11 @@ export default function Dashboard() {
     }
     loadStats()
     const statsTimer = setInterval(loadStats, 15000)
-    const tickTimer = setInterval(() => setTick((t) => t + 1), 10000)
     return () => {
       cancelled = true
       clearInterval(statsTimer)
-      clearInterval(tickTimer)
     }
   }, [])
-
-  let lastUpdatedText = ''
-  if (lastUpdated) {
-    const diff = Math.floor((Date.now() - lastUpdated) / 1000)
-    if (diff < 10) lastUpdatedText = '刚刚更新'
-    else if (diff < 60) lastUpdatedText = `${diff}秒前更新`
-    else lastUpdatedText = `${Math.floor(diff / 60)}分钟前更新`
-  }
 
   // 乐观更新：操作成功后本地立即生效，refresh 拉到新数据后自动清除
   const [overrides, setOverrides] = useState<Record<string, MonitorOverride>>({})
@@ -279,99 +266,60 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
-      <PageHeader
-        title="监控总览"
-        desc={
-          <>
-            管理和监控网页内容变更
-            {lastUpdatedText && (
-              <>
-                {' · '}
-                <span className="text-[0.75rem] text-fg-muted">{lastUpdatedText}</span>
-              </>
-            )}
-          </>
-        }
-        actions={
-          <Link to="/add" className="btn btn-primary">
-            新增监控器
-          </Link>
-        }
-      />
+      <div className="dashboard-body">
+        {/* 中间列：监控项（搜索 + 分类筛选 + 卡片列表） */}
+        <div className="dashboard-main">
+          <PageHeader title="监控总览" />
 
-      <div className="stats-strip">
-        <div className="stat-cell">
-          <span className="stat-label">运行中监控</span>
-          <span className="stat-num">
-            {stats.running_monitors}
-            <span className="align-baseline text-[0.85em] font-semibold text-fg-muted"> / {stats.total_monitors}</span>
-          </span>
-          <div className="stat-progress">
-            <div className="stat-progress-fill" style={{ width: `${runningPercent}%` }} />
+          {/* 搜索框 + 分类筛选 + 新增监控器（同一行，按钮在最右侧） */}
+          <div className="dashboard-toolbar">
+            <div className="search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                <circle cx="11" cy="11" r="7" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                className="form-input"
+                placeholder="搜索监控名称或网址..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+
+            <div className="category-chips">
+              <button
+                type="button"
+                className={`chip${activeCategory === '全部' ? ' active' : ''}`}
+                onClick={() => setActiveCategory('全部')}
+              >
+                全部
+                <span className="chip-count">{(monitors || []).length}</span>
+              </button>
+              {allCategoryNames.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className={`chip${activeCategory === name ? ' active' : ''}`}
+                  onClick={() => setActiveCategory(name)}
+                >
+                  {name}
+                  <span className="chip-count">{categoryCounts[name] ?? 0}</span>
+                </button>
+              ))}
+              <button type="button" className="chip chip-ghost" onClick={() => setShowCategoryManager(true)}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13">
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
+                </svg>
+                管理分类
+              </button>
+            </div>
+
+            <div className="toolbar-spacer" />
+            <Link to="/add" className="btn btn-primary">
+              新增监控器
+            </Link>
           </div>
-        </div>
-        <div className="stat-cell">
-          <span className="stat-label">今日推送</span>
-          <span className="stat-num accent">{formatNum(stats.pushed_today)}</span>
-          <span className="stat-sub">累计 {formatNum(stats.total_updates)} 条变更</span>
-        </div>
-        <div className="stat-cell">
-          <span className="stat-label">待推送更新</span>
-          <span className={`stat-num${stats.unnotified_updates > 0 ? ' warn' : ''}`}>{stats.unnotified_updates}</span>
-          <span className="stat-sub">近 1 小时更新 {stats.updates_last_hour} 条</span>
-        </div>
-        <div className="stat-cell">
-          <span className="stat-label">推送账户</span>
-          <span className="stat-num">{stats.total_accounts}</span>
-          <span className="stat-sub">渠道就绪状态随时可调整</span>
-        </div>
-      </div>
-
-      <div className="dashboard-toolbar">
-        <div className="search-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-            <circle cx="11" cy="11" r="7" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            className="form-input"
-            placeholder="搜索监控名称或网址..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <div className="toolbar-spacer" />
-      </div>
-
-      {/* 分类筛选 chips */}
-      <div className="category-chips">
-        <button
-          type="button"
-          className={`chip${activeCategory === '全部' ? ' active' : ''}`}
-          onClick={() => setActiveCategory('全部')}
-        >
-          全部
-          <span className="chip-count">{(monitors || []).length}</span>
-        </button>
-        {allCategoryNames.map((name) => (
-          <button
-            key={name}
-            type="button"
-            className={`chip${activeCategory === name ? ' active' : ''}`}
-            onClick={() => setActiveCategory(name)}
-          >
-            {name}
-            <span className="chip-count">{categoryCounts[name] ?? 0}</span>
-          </button>
-        ))}
-        <button type="button" className="chip chip-ghost" onClick={() => setShowCategoryManager(true)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13">
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-          管理分类
-        </button>
-      </div>
 
       <Toasts success={successMsg} error={pageErrorMsg} />
 
@@ -448,6 +396,38 @@ export default function Dashboard() {
           </div>
         ))
       )}
+        </div>
+
+        {/* 右侧边栏：总览统计 */}
+        <aside className="dashboard-side">
+          <h2 className="side-title">总览</h2>
+          <div className="stat-cell">
+            <span className="stat-label">运行中监控</span>
+            <span className="stat-num">
+              {stats.running_monitors}
+              <span className="align-baseline text-[0.85em] font-semibold text-fg-muted"> / {stats.total_monitors}</span>
+            </span>
+            <div className="stat-progress">
+              <div className="stat-progress-fill" style={{ width: `${runningPercent}%` }} />
+            </div>
+          </div>
+          <div className="stat-cell">
+            <span className="stat-label">今日推送</span>
+            <span className="stat-num accent">{formatNum(stats.pushed_today)}</span>
+            <span className="stat-sub">累计 {formatNum(stats.total_updates)} 条变更</span>
+          </div>
+          <div className="stat-cell">
+            <span className="stat-label">待推送更新</span>
+            <span className={`stat-num${stats.unnotified_updates > 0 ? ' warn' : ''}`}>{stats.unnotified_updates}</span>
+            <span className="stat-sub">近 1 小时更新 {stats.updates_last_hour} 条</span>
+          </div>
+          <div className="stat-cell">
+            <span className="stat-label">推送账户</span>
+            <span className="stat-num">{stats.total_accounts}</span>
+            <span className="stat-sub">渠道就绪状态随时可调整</span>
+          </div>
+        </aside>
+      </div>
 
       {/* 删除确认弹窗：作为覆盖层渲染在列表之上，不再替换整个列表 */}
       <ConfirmModal

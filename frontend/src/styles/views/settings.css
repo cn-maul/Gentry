@@ -2,6 +2,20 @@
 
 @layer components {
   /* ===== 系统设置页专属 ===== */
+  /* 双栏网格：4 个区块排成 2×2，页头跨整行 */
+  .settings-page {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    align-items: start;
+  }
+  .settings-page > .page-header {
+    grid-column: 1 / -1;
+  }
+  .settings-page .settings-section {
+    margin-bottom: 0;
+  }
+
   .settings-page .proxy-row {
     display: flex;
     gap: 0.5rem;

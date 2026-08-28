@@ -45,11 +45,13 @@ type pushPlusNotifier struct {
 }
 
 func (p *pushPlusNotifier) Send(title, content string) error {
+	// 注意：不要传 timestamp 字段。pushplus 将 timestamp 解释为「消息有效期」——
+	// 服务端时间大于该时间戳时消息直接丢弃并返回 code=999 服务端验证错误。
+	// 用 time.Now() 作时间戳会在请求到达前就已过期，导致推送必然失败。
 	payload := map[string]interface{}{
-		"token":     p.token,
-		"title":     title,
-		"content":   content + "\n",
-		"timestamp": time.Now().UnixMilli(),
+		"token":   p.token,
+		"title":   title,
+		"content": content + "\n",
 	}
 	if p.channel != "" {
 		payload["channel"] = p.channel

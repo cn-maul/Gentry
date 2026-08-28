@@ -45,17 +45,43 @@ export default function ScanRuleManagement() {
   const rules = rulesData ?? []
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
   const fileInput = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     load()
   }, [load])
 
+  const allSelected = rules.length > 0 && selected.size === rules.length
+  const someSelected = selected.size > 0 && !allSelected
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(rules.map((r) => r.id)))
+    }
+  }
+
+  function toggleOne(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   async function handleDelete(rule: ScanRule) {
     if (!window.confirm(`确定删除规则「${rule.name}」吗？`)) return
     try {
       await deleteScanRule(rule.id)
       showSuccess('规则已删除')
+      setSelected((prev) => {
+        const next = new Set(prev)
+        next.delete(rule.id)
+        return next
+      })
       refresh()
     } catch (error) {
       showError('删除规则失败: ' + errorMessage(error))
@@ -65,7 +91,8 @@ export default function ScanRuleManagement() {
   async function handleExport() {
     setExporting(true)
     try {
-      const response = await exportScanRules()
+      const ids = selected.size > 0 ? [...selected] : undefined
+      const response = await exportScanRules(ids)
       if (response.code !== 0 || !response.data) throw new Error(response.message || '导出失败')
       const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json;charset=utf-8' })
       const link = document.createElement('a')
@@ -73,7 +100,8 @@ export default function ScanRuleManagement() {
       link.download = `gentry-scan-rules-${new Date().toISOString().slice(0, 10)}.json`
       link.click()
       URL.revokeObjectURL(link.href)
-      showSuccess(`已导出 ${(rules || []).length} 条规则`)
+      showSuccess(`已导出 ${ids ? ids.length : rules.length} 条规则`)
+      if (ids) setSelected(new Set())
     } catch (error) {
       showError('导出规则失败: ' + errorMessage(error))
     } finally {
@@ -92,6 +120,7 @@ export default function ScanRuleManagement() {
       const imported = response.data?.imported || 0
       const skipped = response.data?.skipped || 0
       showSuccess(`已导入 ${imported} 条${skipped ? `，跳过 ${skipped} 条同名规则` : ''}`)
+      setSelected(new Set())
       await refresh()
     } catch (error) {
       showError('导入规则失败: ' + errorMessage(error))
@@ -107,7 +136,6 @@ export default function ScanRuleManagement() {
 
       <PageHeader
         title="规则库"
-        desc={`共 ${rules.length} 条规则；监控器的内容识别完全依赖这里的规则`}
         actions={
           <>
             <input
@@ -125,13 +153,17 @@ export default function ScanRuleManagement() {
               </svg>
               {importing ? '导入中...' : '导入'}
             </button>
-            <button className="btn btn-ghost btn-sm" disabled={exporting || rules.length === 0} onClick={handleExport}>
+            <button
+              className="btn btn-ghost btn-sm"
+              disabled={exporting || rules.length === 0}
+              onClick={handleExport}
+            >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <path d="M12 21V9" />
                 <path d="m17 14-5-5-5 5" />
                 <path d="M5 3h14" />
               </svg>
-              {exporting ? '导出中...' : '导出'}
+              {exporting ? '导出中...' : selected.size > 0 ? `导出选中 (${selected.size})` : '导出'}
             </button>
             <button className="btn btn-primary" onClick={() => navigate('/rules/add')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" aria-hidden="true">
@@ -148,7 +180,7 @@ export default function ScanRuleManagement() {
       <section className="library-section" aria-labelledby="rule-library-title">
         <div className="section-title-row library-title">
           <h2 id="rule-library-title">已保存规则</h2>
-          <span>{rules.length} 条</span>
+          <span>{selected.size > 0 ? `已选 ${selected.size} / ${rules.length} 条` : `${rules.length} 条`}</span>
         </div>
 
         {loading ? (
@@ -180,6 +212,18 @@ export default function ScanRuleManagement() {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th className="check-col">
+                    <input
+                      type="checkbox"
+                      className="row-checkbox"
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someSelected
+                      }}
+                      onChange={toggleAll}
+                      title="全选/取消全选"
+                    />
+                  </th>
                   <th>规则名称</th>
                   <th>适用地址</th>
                   <th>数据源</th>
@@ -192,6 +236,14 @@ export default function ScanRuleManagement() {
               <tbody>
                 {rules.map((rule) => (
                   <tr key={rule.id}>
+                    <td className="check-col">
+                      <input
+                        type="checkbox"
+                        className="row-checkbox"
+                        checked={selected.has(rule.id)}
+                        onChange={() => toggleOne(rule.id)}
+                      />
+                    </td>
                     <td>
                       <span className="font-bold text-fg">{rule.name}</span>
                     </td>

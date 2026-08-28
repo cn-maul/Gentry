@@ -32,6 +32,27 @@ export interface PagedUpdates {
   total: number
 }
 
+/** 推送记录（时间轴） */
+export interface PushLog {
+  id: number
+  created_at: string
+  site_id: number
+  site_name: string
+  status: 'success' | 'partial' | 'failed' | 'skipped'
+  reason?: string
+  account_names: string[]
+  item_count: number
+  titles: string[]
+  detail?: string
+}
+
+export interface PagedPushLogs {
+  records: PushLog[]
+  total: number
+  page: number
+  size: number
+}
+
 /** 系统统计 */
 export interface Stats {
   total_monitors: number
@@ -58,9 +79,20 @@ export interface NotificationProviderMeta {
   required_fields?: string[]
 }
 
-/** 通知设置 */
+/** 推送模板（可配置多个，通过 active_template 选中启用） */
+export interface PushTemplate {
+  name: string
+  title_template: string
+  content_template: string
+}
+
+/** 通知设置（全局推送开关 + 推送模板列表） */
 export interface NotificationSettings {
   enabled: boolean
+  /** 已保存的自定义模板列表（不含内置默认模板） */
+  templates?: PushTemplate[]
+  /** 选中的模板名；空串表示使用内置默认模板 */
+  active_template?: string
 }
 
 /** 规则扫描候选 */

@@ -44,6 +44,7 @@ func (s *WebServer) setupRoutes() {
 	s.registerAccountRoutes(authenticated)
 	s.registerScanRuleRoutes(authenticated)
 	s.registerUpdateRoutes(authenticated)
+	s.registerPushLogRoutes(authenticated)
 
 	// 公开接口（不需要认证）
 	v1.GET("/version", s.getVersion)
@@ -90,6 +91,7 @@ func (s *WebServer) registerAccountRoutes(group *gin.RouterGroup) {
 	accounts.POST("", createAccount)
 	accounts.PUT("/:id", updateAccount)
 	accounts.DELETE("/:id", deleteAccount)
+	accounts.POST("/:id/test", testNotificationAccount)
 
 	group.GET("/settings/notification-providers", listNotificationProviders)
 }
@@ -107,6 +109,11 @@ func (s *WebServer) registerScanRuleRoutes(group *gin.RouterGroup) {
 	rules.POST("/:id/test", testScanRule)
 	rules.POST("/capture", captureScanRule)
 	rules.POST("/test-draft", testDraftMonitor)
+}
+
+func (s *WebServer) registerPushLogRoutes(group *gin.RouterGroup) {
+	logs := group.Group("/pushlogs")
+	logs.GET("", listPushLogs)
 }
 
 func (s *WebServer) registerUpdateRoutes(group *gin.RouterGroup) {

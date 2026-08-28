@@ -1,6 +1,93 @@
 /* 推送账户管理 */
 
 @layer components {
+  /* ===== 双栏布局：左账户列表 / 右设置+模板 ===== */
+  .push-page .push-body {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+
+  .push-page .push-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .push-page .push-right {
+    width: 360px;
+    flex-shrink: 0;
+  }
+
+  /* ===== 推送模板列表项 ===== */
+  .push-page .template-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    width: 100%;
+    text-align: left;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 0.6rem;
+    cursor: pointer;
+    transition: var(--transition);
+  }
+  .push-page .template-item:hover {
+    border-color: var(--border);
+    box-shadow: var(--shadow);
+  }
+  .push-page .template-item.active {
+    border-color: var(--brand-soft-border);
+    background: var(--brand-soft);
+  }
+  .push-page .template-item-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .push-page .template-radio {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    flex-shrink: 0;
+    background: var(--bg-surface);
+  }
+  .push-page .template-item.active .template-radio {
+    border-color: var(--brand);
+    background: var(--brand);
+    box-shadow: inset 0 0 0 3px var(--bg-surface);
+  }
+  .push-page .template-name {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+  .push-page .template-actions {
+    display: flex;
+    gap: 0.15rem;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: var(--transition);
+  }
+  .push-page .template-item:hover .template-actions {
+    opacity: 1;
+  }
+  .push-page .template-value {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* ===== 通知（推送账户管理） ===== */
   .push-page .account-card {
     background: var(--bg-surface);
@@ -10,9 +97,10 @@
     margin-bottom: 0.6rem;
     box-shadow: var(--shadow-sm);
     transition: var(--transition);
+    cursor: pointer;
   }
   .push-page .account-card:hover {
-    border-color: var(--border);
+    border-color: var(--brand-soft-border);
     box-shadow: var(--shadow);
   }
 

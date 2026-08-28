@@ -417,6 +417,20 @@
     font-size: 0.75rem;
   }
 
+  /* 规则勾选列 */
+  .scan-rules-page .check-col {
+    width: 2.2rem;
+    padding-right: 0.25rem;
+    text-align: center;
+  }
+  .scan-rules-page .row-checkbox {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--brand);
+    cursor: pointer;
+    vertical-align: middle;
+  }
+
   /* 添加规则弹窗内的适用范围 */
   .builder-scope {
     display: flex;
